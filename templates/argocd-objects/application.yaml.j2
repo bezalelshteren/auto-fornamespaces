@@ -1,0 +1,36 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+
+metadata:
+  name: {{ names.application_name }}
+  namespace: argocd
+
+  labels:
+    tenant: {{ request.tenant }}
+    environment: {{ request.environment }}
+
+spec:
+  project: {{ names.project_name }}
+
+  source:
+    repoURL: {{ request.git.repo_url }}
+    targetRevision: {{ request.git.target_revision }}
+    path: {{ request.git.path }}
+
+    helm:
+      valueFiles:
+{% for value_file in request.helm.value_files %}
+        - {{ value_file }}
+{% endfor %}
+
+  destination:
+    server: {{ request.cluster.server }}
+    namespace: {{ names.namespace }}
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
+    syncOptions:
+      - CreateNamespace=true

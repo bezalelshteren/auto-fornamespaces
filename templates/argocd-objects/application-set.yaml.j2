@@ -1,0 +1,48 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+
+metadata:
+  name: {{ names.application_set_name }}
+  namespace: argocd
+
+  labels:
+    tenant: {{ request.tenant }}
+    environment: {{ request.environment }}
+
+spec:
+  generators:
+    - list:
+        elements:
+{% for application in request.applications %}
+          - name: {{ application.name }}
+            path: {{ application.path }}
+            namespace: {{ application.namespace }}
+{% endfor %}
+
+  template:
+    metadata:
+      name: '{{"{{"}}name{{"}}"}}'
+
+      labels:
+        tenant: {{ request.tenant }}
+        environment: {{ request.environment }}
+
+    spec:
+      project: {{ names.project_name }}
+
+      source:
+        repoURL: {{ request.git.repo_url }}
+        targetRevision: {{ request.git.target_revision }}
+        path: '{{"{{"}}path{{"}}"}}'
+
+      destination:
+        server: {{ request.cluster.server }}
+        namespace: '{{"{{"}}namespace{{"}}"}}'
+
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+
+        syncOptions:
+          - CreateNamespace=true

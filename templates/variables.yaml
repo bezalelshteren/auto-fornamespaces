@@ -1,0 +1,37 @@
+tenant:
+  name: <customer-a>
+
+application:
+  name: <my-app>
+
+lifecycle:
+  name: <dev>
+
+namespace:
+  name: <customer-a-dev>
+ldap-group: <customer-a-dev-ldap-group>
+
+argocd:
+  enabled: true
+
+  project:
+    name: customer-a-dev
+
+  application:
+    name: customer-a-dev-my-app
+
+  application_set:
+    name: customer-a-dev-applications
+
+git:
+  repo_url: "https://gitlab.example.com/platform/my-app.git"
+  target_revision: "main"
+  path: "helm/my-app"
+
+destination:
+  server: "https://kubernetes.default.svc"
+  namespace: customer-a-dev
+
+helm:
+  value_files:
+    - values/dev.yaml

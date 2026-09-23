@@ -1,0 +1,4 @@
+namespace:
+    name: <namespace-name>
+    ldap-group: <ldapgroup>
+    scc: <scc>
