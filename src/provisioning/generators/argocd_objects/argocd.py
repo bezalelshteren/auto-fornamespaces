@@ -2,12 +2,22 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from provisioning.config.settings import TEMPLATES_DIR
-from provisioning.models.provision_request import ProvisionRequest
-from provisioning.services.naming import build_names
+from ...config.settings import TEMPLATES_DIR
+from ...models.provision_request import ProvisionRequest
+from ...services.argocd_checks import ProvisionDecision
+from ...services.naming import build_names
 
 
-def generate_argocd(request: ProvisionRequest, output_dir: Path) -> None:
+def generate_argocd(
+    request: ProvisionRequest,
+    decision: ProvisionDecision,
+    app_project_output_dir: Path,
+    applications_output_dir: Path,
+) -> None:
+    """
+    Generates the Argo CD YAML objects according to the
+    decisions produced by argocd_checks.py.
+    """
 
     if not request.argocd.enabled:
         return
@@ -16,7 +26,7 @@ def generate_argocd(request: ProvisionRequest, output_dir: Path) -> None:
 
     environment = Environment(
         loader=FileSystemLoader(
-            TEMPLATES_DIR / "argocd"
+            TEMPLATES_DIR / "argocd-objects"
         )
     )
 
@@ -25,22 +35,75 @@ def generate_argocd(request: ProvisionRequest, output_dir: Path) -> None:
         "names": names,
     }
 
-    output_dir.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
+    templates: dict[str, tuple[Path, str]] = {}
 
-    templates = {
-        "app-project.yaml.j2": "app-project.yaml",
-        "application.yaml.j2": "application.yaml",
-        "application-set.yaml.j2": "application-set.yaml",
-    }
+    # ---------------------------------------------------------
+    # AppProject
+    # ---------------------------------------------------------
 
-    for template_name, output_name in templates.items():
+    if request.lifecycle == "prod":
 
-        template = environment.get_template(template_name)
+        if decision.create_app_project:
+            templates["app-project_prod.yaml.j2"] = (
+                app_project_output_dir,
+                f"{request.lifecycle}.yaml",
+            )
 
-        rendered = template.render(**context)
+    elif request.lifecycle in {"dev", "stg"}:
+
+        if decision.create_app_project:
+            templates["app-project_nonprod.yaml.j2"] = (
+                app_project_output_dir,
+                f"{request.lifecycle}.yaml",
+            )
+
+    # ---------------------------------------------------------
+    # Standalone Application
+    # ---------------------------------------------------------
+
+    if decision.create_application:
+        templates["application.yaml.j2"] = (
+            applications_output_dir,
+            f"{request.application}.yaml",
+        )
+
+    # ---------------------------------------------------------
+    # ApplicationSet
+    # ---------------------------------------------------------
+
+    if decision.create_application_set:
+        templates["application-set.yaml.j2"] = (
+            applications_output_dir,
+            "applicationSet.yaml",
+        )
+
+    # ---------------------------------------------------------
+    # Create output directories
+    # ---------------------------------------------------------
+    if decision.create_app_project:
+        app_project_output_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+    if decision.create_application or decision.create_application_set:
+        applications_output_dir.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+    # ---------------------------------------------------------
+    # Render templates and write files
+    # ---------------------------------------------------------
+
+    for template_name, (output_dir, output_name) in templates.items():
+
+        template = environment.get_template(
+            template_name
+        )
+
+        rendered = template.render(
+            **context
+        )
 
         output_file = output_dir / output_name
 

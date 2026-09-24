@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
-from .models.provision_request import ProvisionRequest
 from .services.provision import provision
+from .models.provision_request import ProvisionRequest
 
 
 app = FastAPI(

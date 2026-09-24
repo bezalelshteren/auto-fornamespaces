@@ -7,17 +7,17 @@ metadata:
 
   labels:
     tenant: {{ request.tenant }}
-    environment: {{ request.environment }}
+    lifecycle: {{ request.lifecycle }}
 
 spec:
-  description: "{{ request.tenant }} - {{ request.environment }}"
+  description: "{{ request.tenant }} - {{ request.lifecycle }}"
 
   sourceRepos:
     - {{ request.git.repo_url }}
 
   destinations:
     - namespace: {{ names.namespace }}
-      server: {{ request.cluster.server }}
+      server: server
 
   namespaceResourceWhitelist:
     - group: "*"

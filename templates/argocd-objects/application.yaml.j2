@@ -7,7 +7,7 @@ metadata:
 
   labels:
     tenant: {{ request.tenant }}
-    environment: {{ request.environment }}
+    lifecycle: {{ request.lifecycle }}
 
 spec:
   project: {{ names.project_name }}
@@ -17,14 +17,9 @@ spec:
     targetRevision: {{ request.git.target_revision }}
     path: {{ request.git.path }}
 
-    helm:
-      valueFiles:
-{% for value_file in request.helm.value_files %}
-        - {{ value_file }}
-{% endfor %}
 
   destination:
-    server: {{ request.cluster.server }}
+    server: server
     namespace: {{ names.namespace }}
 
   syncPolicy:

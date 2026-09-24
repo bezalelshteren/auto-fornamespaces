@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+
+metadata:
+  name: gravity-dev
+  namespace: argocd
+
+  labels:
+    tenant: gravity
+    lifecycle: dev
+
+spec:
+  description: "gravity - dev"
+
+  sourceRepos:
+    - string
+
+  destinations:
+    - namespace: gravity-dev-my-app-name
+      server: server
+
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+
+metadata:
+  name: {{ names.project_name }}
+  namespace: argocd
+
+  labels:
+    tenant: {{ request.tenant }}
+    lifecycle: {{ request.lifecycle }}
+
+spec:
+  description: "{{ request.tenant }} - {{ request.lifecycle }}"
+
+  sourceRepos:
+    - {{ request.git.repo_url }}
+
+  destinations:
+    - namespace: {{ names.namespace }}
+      server: server
+
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

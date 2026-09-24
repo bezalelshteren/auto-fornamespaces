@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+
+metadata:
+  name: gravity-dev-my-app-name
+  namespace: argocd
+
+  labels:
+    tenant: gravity
+    lifecycle: dev
+
+spec:
+  project: gravity-dev
+
+  source:
+    repoURL: string
+    targetRevision: master
+    path: string
+
+
+  destination:
+    server: server
+    namespace: gravity-dev-my-app-name
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+
+    syncOptions:
+      - CreateNamespace=true
