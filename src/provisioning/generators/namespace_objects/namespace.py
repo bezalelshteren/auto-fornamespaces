@@ -19,7 +19,7 @@ def generate_argocd(
     decisions produced by argocd_checks.py.
     """
 
-    if not request.argocd.enabled:
+    if not request.namespace.enabled:
         return
 
     names = build_names(request)

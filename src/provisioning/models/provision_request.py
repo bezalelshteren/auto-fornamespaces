@@ -3,7 +3,9 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class NamespaceConfig(BaseModel):
+    enabled: bool = True
     customer_yahalom: bool = False
+
     scc: str | None = None
 
     @model_validator(mode="after")
