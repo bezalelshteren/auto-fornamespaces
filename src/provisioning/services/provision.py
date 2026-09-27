@@ -1,12 +1,13 @@
 from pathlib import Path
-from ..config.settings import GENERATED_DIR, GIT_REPO_PATH
+from ..models.git_services import GitActions
+from ..config.settings import GENERATED_DIR, GIT_REPO_PATH, GIT_REPO_FOR_ARGOCD_OBJECTS
 from ..generators.argocd_objects.argocd import generate_argocd
 from ..models.provision_request import ProvisionRequest
 from ..services.argocd_checks import run_checks
 
 
 def provision(
-    request: ProvisionRequest,
+    request: ProvisionRequest
 ) -> dict:
     """
     Main provisioning workflow.
@@ -20,7 +21,7 @@ def provision(
     #
     # Later this should point to the cloned Git repository
     # or another Git integration layer.
-
+    git = GitActions(git_repo_to_clone=GIT_REPO_FOR_ARGOCD_OBJECTS)
 
     decision = run_checks(
         request=request,
@@ -41,10 +42,12 @@ def provision(
     )
 
     generate_argocd(
+        git=git,
         request=request,
         decision=decision,
         applications_output_dir=applications_output_dir,
         app_project_output_dir=app_project_output_dir
+
     )
 
     return {

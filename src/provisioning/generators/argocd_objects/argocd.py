@@ -1,14 +1,16 @@
 from pathlib import Path
-
+from ...models.git_services import GitActions
 from jinja2 import Environment, FileSystemLoader
 
 from ...config.settings import TEMPLATES_DIR
+from ...config.settings import GIT_REPO_FOR_ARGOCD_OBJECTS
 from ...models.provision_request import ProvisionRequest
 from ...services.argocd_checks import ProvisionDecision
 from ...services.naming import build_names
 
 
 def generate_argocd(
+    git: GitActions,
     request: ProvisionRequest,
     decision: ProvisionDecision,
     app_project_output_dir: Path,
@@ -37,11 +39,8 @@ def generate_argocd(
 
     templates: dict[str, tuple[Path, str]] = {}
 
-    # ---------------------------------------------------------
-    # AppProject
-    # ---------------------------------------------------------
 
-    if request.lifecycle == "prod":
+    if request.lifecycle == "prd":
 
         if decision.create_app_project:
             templates["app-project_prod.yaml.j2"] = (
@@ -57,9 +56,6 @@ def generate_argocd(
                 f"{request.lifecycle}.yaml",
             )
 
-    # ---------------------------------------------------------
-    # Standalone Application
-    # ---------------------------------------------------------
 
     if decision.create_application:
         templates["application.yaml.j2"] = (
@@ -67,9 +63,6 @@ def generate_argocd(
             f"{request.application}.yaml",
         )
 
-    # ---------------------------------------------------------
-    # ApplicationSet
-    # ---------------------------------------------------------
 
     if decision.create_application_set:
         templates["application-set.yaml.j2"] = (
@@ -77,9 +70,6 @@ def generate_argocd(
             "applicationSet.yaml",
         )
 
-    # ---------------------------------------------------------
-    # Create output directories
-    # ---------------------------------------------------------
     if decision.create_app_project:
         app_project_output_dir.mkdir(
             parents=True,
@@ -91,23 +81,29 @@ def generate_argocd(
             exist_ok=True,
         )
 
-    # ---------------------------------------------------------
-    # Render templates and write files
-    # ---------------------------------------------------------
+    if decision.create_app_project or decision.create_application_set or decision.create_application:
+        git.clone_or_update()
+        git.checkout_branch(f"feat/argocd_objects/{request.application}")
 
-    for template_name, (output_dir, output_name) in templates.items():
+        for template_name, (output_dir, output_name) in templates.items():
+            template = environment.get_template(
+                template_name
+            )
 
-        template = environment.get_template(
-            template_name
-        )
+            rendered = template.render(
+                **context
+            )
 
-        rendered = template.render(
-            **context
-        )
+            output_file = output_dir / output_name
 
-        output_file = output_dir / output_name
+            print(f"[generate_argocd] git repo path : {git.git_repo_for_argo}")
+            print(f"[generate_argocd] writing to     : {output_file.resolve()}")
+            print(
+                f"[generate_argocd] is under repo? : {git.git_repo_for_argo.resolve() in output_file.resolve().parents}")
 
-        output_file.write_text(
-            rendered,
-            encoding="utf-8",
-        )
+            output_file.write_text(
+                rendered,
+                encoding="utf-8",
+            )
+        if not git.get_current_branch() == "master":
+            git.git_add_commit_push(f"added argocd objects for tenant: {request.tenant}, lifecycle: {request.lifecycle}, application: {request.application}" )
