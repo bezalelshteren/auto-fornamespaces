@@ -69,6 +69,13 @@ def generate_monitoring_ingest(
     template = environment.get_template(
         ".values-ingest.yaml.j2"
     )
+    context = {
+        "namespace_name": request.application,
+        "namespace_ip": request.monitoring.ip,
+        "namespace_ip_pmm": request.monitoring.ip_pmm,
+        "namespace_ecs_id": request.monitoring.ecs_id,
+        "namespace_ecs_token": request.monitoring.ecs_token,
+    }
 
     # Render the template
     rendered = template.render(**context)
@@ -100,13 +107,23 @@ def generate_monitoring_ingest(
         rendered,
         encoding="utf-8",
     )
+    # Load high.conf as a Jinja2 template
+    high_conf_template = environment.get_template("high.conf")
+    context = {
+        "chart": names["chart_monitoring"],
+        "version": names["chart_monitoring_ingest_version"],
+    }
 
-    high_conf_source = template_dir / "high.conf"
+    # Render the template with the same context
+    high_conf_rendered = high_conf_template.render(**context)
+
+    # Destination file
     high_conf_destination = output_dir / "high.conf"
 
-    shutil.copy2(
-        high_conf_source,
-        high_conf_destination,
+    # Write the rendered file
+    high_conf_destination.write_text(
+        high_conf_rendered,
+        encoding="utf-8",
     )
 
     print(

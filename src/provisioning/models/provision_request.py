@@ -87,6 +87,7 @@ class ProvisionRequest(BaseModel):
     team: str = Field(min_length=1)
     application: str = Field(min_length=1)
     lifecycle: str = Field(min_length=1)
+    ldap_group: str = Field(min_length=1)
     target_sites: list[str]
 
     git: GitConfig

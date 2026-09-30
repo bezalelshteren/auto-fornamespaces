@@ -77,8 +77,7 @@ def generate_argocd(
 
 
         # Create / checkout feature branch
-        branch_name = f"feat/argocd_objects/{request.application}"
-
+        branch_name = f"feat/argocd_objects/{request.application}-{request.lifecycle}-{request.tenant}"
         if not git.checkout_branch(branch_name):
             raise RuntimeError(
                 f"Failed to checkout branch: {branch_name}"

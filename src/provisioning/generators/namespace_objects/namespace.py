@@ -51,10 +51,25 @@ def generate_namespace(
     )
 
     # Data available inside the Jinja2 template
-    context = {
-        "request": request,
-        "names": names,
-    }
+    if request.namespace_config.customer_yahalom:
+        context = {
+            "request": request,
+            "names": names,
+            "namespace": {
+                "name": names["namespace"],
+                "ldap_group": request.ldap_group,
+                "scc": request.scc,
+            },
+        }
+    else:
+        context = {
+            "request": request,
+            "names": names,
+            "namespace": {
+                "name": names["namespace"],
+                "ldap_group": request.ldap_group,
+            },
+        }
 
     # Make sure the Git repository exists and is up to date
     if not git.clone_or_update():
@@ -64,8 +79,7 @@ def generate_namespace(
         )
 
     # Create / checkout feature branch
-    branch_name = f"feat/namespace_objects/{request.application}"
-
+    branch_name = f"feat/namespace_objects/{request.application}-{request.lifecycle}-{request.tenant}"
     if not git.checkout_branch(branch_name):
         raise RuntimeError(
             f"Failed to checkout branch: {branch_name}"
@@ -111,14 +125,24 @@ def generate_namespace(
         encoding="utf-8",
     )
 
-    high_conf_source = template_dir / "high.conf"
+    # Load high.conf as a Jinja2 template
+    high_conf_template = environment.get_template("high.conf")
+    context = {
+        "chart": "monitoring-stack",
+        "version": "1.0.0",
+    }
+
+    # Render the template with the same context
+    high_conf_rendered = high_conf_template.render(**context)
+
+    # Destination file
     high_conf_destination = output_dir / "high.conf"
 
-    shutil.copy2(
-        high_conf_source,
-        high_conf_destination,
+    # Write the rendered file
+    high_conf_destination.write_text(
+        high_conf_rendered,
+        encoding="utf-8",
     )
-
     print(
         f"[generate_namespace] copied high.conf: "
         f"{high_conf_destination.resolve()}"
