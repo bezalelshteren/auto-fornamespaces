@@ -19,6 +19,6 @@ def health():
 def create_provision(request: ProvisionRequest):
 
     result_argo = provision_argo(request=request)
-    result_namespace= provision_namespace(request=request)
-    result_monitoring = provision_monitoring(request=request)
-    return result_argo ,result_namespace , result_monitoring
+    provision_namespace(request=request)
+    provision_monitoring(request=request)
+    return

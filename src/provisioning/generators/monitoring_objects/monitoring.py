@@ -9,7 +9,7 @@ from ...models.provision_request import ProvisionRequest
 from ...services.naming import build_names
 
 
-def generate_monitoring(
+def generate_monitoring_ingest(
     git: GitActions,
     request: ProvisionRequest,
     monitoring_output_dir: Path,
@@ -49,12 +49,12 @@ def generate_monitoring(
     # Make sure the Git repository exists and is up to date
     if not git.clone_or_update():
         raise RuntimeError(
-            f"Failed to clone/update Git repository: "
+            f"Failed to clone/update Git repository:"
             f"{git.git_repo_to_do_actions}"
         )
 
     # Create / checkout feature branch
-    branch_name = f"feat/namespace_objects/{request.application}"
+    branch_name = f"feat/monitoring_objects/{request.application}"
 
     if not git.checkout_branch(branch_name):
         raise RuntimeError(
@@ -67,7 +67,7 @@ def generate_monitoring(
         exist_ok=True,
     )
     template = environment.get_template(
-        ".values.yaml.j2"
+        ".values-ingest.yaml.j2"
     )
 
     # Render the template
@@ -75,23 +75,23 @@ def generate_monitoring(
 
     # Output filename
     output_name = (
-        ".values.yaml"
+        ".values-ingest.yaml"
     )
 
     output_file = output_dir / output_name
 
     print(
-        f"[generate_namespace] git repo path : "
+        f"[generate_monitoring] git repo path : "
         f"{git.git_repo_to_do_actions.resolve()}"
     )
 
     print(
-        f"[generate_namespace] writing to     : "
+        f"[generate_monitoring] writing to     : "
         f"{output_file.resolve()}"
     )
 
     print(
-        f"[generate_namespace] is under repo? : "
+        f"[generate_monitoring] is under repo? : "
         f"{git.git_repo_to_do_actions.resolve() in output_file.resolve().parents}"
     )
 
@@ -110,7 +110,7 @@ def generate_monitoring(
     )
 
     print(
-        f"[generate_namespace] copied high.conf: "
+        f"[generate_monitoring] copied high.conf: "
         f"{high_conf_destination.resolve()}"
     )
 
@@ -120,7 +120,7 @@ def generate_monitoring(
         and git.get_current_branch() != "main"
     ):
         git.git_add_commit_push(
-            "added namespace object for "
+            "added monitoring object for "
             f"tenant: {request.tenant}, "
             f"lifecycle: {request.lifecycle}, "
             f"application: {request.application}"

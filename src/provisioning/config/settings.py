@@ -36,7 +36,7 @@ NAMESPACE_TEMPLATES_DIR = (
     TEMPLATES_DIR / "namespace-objects"
 )
 MONITORING_TEMPLATES_DIR = (
-    TEMPLATES_DIR / "namespace-objects"
+    TEMPLATES_DIR / "monitoring-objects"
 )
 
 ARGO_DIR_TARGET = (
@@ -46,7 +46,9 @@ ARGO_DIR_TARGET = (
 NAMESPACE_DIR_TARGET = (
     BASE_DIR / "git-repos" / "cluster-registry"
 )
-
+MONITORING_DIR_TARGET = (
+    BASE_DIR / "git-repos" / "monitoring-registry"
+)
 
 NAMESPACE_REPOSITORIES = {
     "dev1": {
