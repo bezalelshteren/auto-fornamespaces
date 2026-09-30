@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+
 from ..models.provision_request import ProvisionRequest
 
 
@@ -18,25 +19,16 @@ class ProvisionDecision:
 def app_project_exists(
     git_repo_path: Path,
     tenant: str,
+    lifecycle: str
 ) -> bool:
-    """
-    Checks whether an AppProject for the tenant
-    already exists in the Git repository.
 
-    Expected file:
-
-        argocd/app-projects/<tenant>.yaml
-
-    Example:
-
-        argocd/app-projects/customer-a.yaml
-    """
 
     app_project_file = (
         git_repo_path
-        / "argocd"
-        / "app-projects"
-        / f"{tenant}.yaml"
+        / "argocd_projects"
+        / tenant
+        / lifecycle
+        / f"{lifecycle}.yaml"
     )
 
     return app_project_file.exists()
@@ -85,7 +77,7 @@ def run_checks(
     project_exists = app_project_exists(
         git_repo_path=git_repo_path,
         tenant=request.tenant,
-    )
+        lifecycle=request.lifecycle)
 
     return ProvisionDecision(
         create_app_project=not project_exists,

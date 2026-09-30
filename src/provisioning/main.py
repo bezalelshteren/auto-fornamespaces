@@ -1,6 +1,5 @@
 from fastapi import FastAPI
-from .models.git_services import GitActions
-from .services.provision import provision
+from .services.provision import provision_argo, provision_namespace ,provision_monitoring
 from .models.provision_request import ProvisionRequest
 
 
@@ -19,6 +18,7 @@ def health():
 @app.post("/provision")
 def create_provision(request: ProvisionRequest):
 
-    result = provision(request)
-
-    return result
+    result_argo = provision_argo(request=request)
+    result_namespace= provision_namespace(request=request)
+    result_monitoring = provision_monitoring(request=request)
+    return result_argo ,result_namespace , result_monitoring

@@ -6,7 +6,7 @@ class NamespaceConfig(BaseModel):
     enabled: bool = True
     customer_yahalom: bool = False
 
-    scc: str | None = None
+    scc: list[str] | None = None
 
     @model_validator(mode="after")
     def validate_scc(self):
@@ -87,6 +87,7 @@ class ProvisionRequest(BaseModel):
     team: str = Field(min_length=1)
     application: str = Field(min_length=1)
     lifecycle: str = Field(min_length=1)
+    target_sites: list[str]
 
     git: GitConfig
 

@@ -2,7 +2,6 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 
-GIT_REPO_PATH = BASE_DIR / "git-repos"
 
 
 GIT_REPO_FOR_ARGOCD_OBJECTS = (
@@ -31,11 +30,34 @@ TEMPLATES_DIR = (
 )
 
 ARGOCD_TEMPLATES_DIR = (
-    TEMPLATES_DIR / "argocd_objects"
+        TEMPLATES_DIR / "argocd_objects"
+)
+NAMESPACE_TEMPLATES_DIR = (
+    TEMPLATES_DIR / "namespace-objects"
+)
+MONITORING_TEMPLATES_DIR = (
+    TEMPLATES_DIR / "namespace-objects"
+)
+
+ARGO_DIR_TARGET = (
+    BASE_DIR / "git-repos" / "argocd-registry"
+)
+
+NAMESPACE_DIR_TARGET = (
+    BASE_DIR / "git-repos" / "cluster-registry"
 )
 
 
-
-GENERATED_DIR = (
-    BASE_DIR / BASE_DIR / "git-repos" / "argocd-registry"
-)
+NAMESPACE_REPOSITORIES = {
+    "dev1": {
+        "git_repo": "https://github.com/bezalelshteren/cluster-registry.git",
+        "local_path": Path( BASE_DIR / "git-repos" / "cluster-registry"),
+    },
+    "prd1": {
+        "git_repo": "https://github.com/company/namespaces-prd.git",
+        "local_path": Path( BASE_DIR / "git-repos" / "cluster-registry" / "namespaces-prd"),
+    },"stg1": {
+        "git_repo": "https://github.com/company/namespaces-stg.git",
+        "local_path": Path( BASE_DIR / "git-repos" / "cluster-registry" / "namespaces-stg"),
+    },
+}

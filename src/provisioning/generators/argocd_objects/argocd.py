@@ -5,6 +5,7 @@ from ...config.settings import TEMPLATES_DIR
 from ...models.provision_request import ProvisionRequest
 from ...services.argocd_checks import ProvisionDecision
 from ...services.naming import build_names
+from ...services.argocd_checks import app_project_exists
 
 
 def generate_argocd(
@@ -36,7 +37,11 @@ def generate_argocd(
     }
 
     templates: dict[str, tuple[Path, str]] = {}
-
+    if not git.clone_or_update():
+        raise RuntimeError(
+            f"Failed to clone/update Git repository: "
+            f"{git.git_repo_to_do_actions}"
+        )
 
     if request.lifecycle == "prd":
 
@@ -68,20 +73,39 @@ def generate_argocd(
             "applicationSet.yaml",
         )
 
-    if decision.create_app_project:
-        app_project_output_dir.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-    if decision.create_application or decision.create_application_set:
-        applications_output_dir.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
-
     if decision.create_app_project or decision.create_application_set or decision.create_application:
-        git.clone_or_update()
-        git.checkout_branch(f"feat/argocd_objects/{request.application}")
+
+
+        # Create / checkout feature branch
+        branch_name = f"feat/argocd_objects/{request.application}"
+
+        if not git.checkout_branch(branch_name):
+            raise RuntimeError(
+                f"Failed to checkout branch: {branch_name}"
+            )
+
+        # Only now it is safe to create folders inside the repo
+        if decision.create_app_project:
+            app_project_output_dir.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+        elif not decision.create_app_project:
+            if  app_project_exists(
+                git_repo_path=git.git_repo_to_do_actions,
+                tenant=request.tenant,
+                lifecycle=request.lifecycle
+            ):
+                print(
+                    f"[generate_argocd] Argo CD project already exists for tenant: {request.tenant}, lifecycle: {request.lifecycle}. adding jost the new repo"
+                )
+
+
+        if decision.create_application or decision.create_application_set:
+            applications_output_dir.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
 
         for template_name, (output_dir, output_name) in templates.items():
             template = environment.get_template(
@@ -94,14 +118,14 @@ def generate_argocd(
 
             output_file = output_dir / output_name
 
-            print(f"[generate_argocd] git repo path : {git.git_repo_for_argo}")
+            print(f"[generate_argocd] git repo path : {git.git_repo_to_do_actions}")
             print(f"[generate_argocd] writing to     : {output_file.resolve()}")
             print(
-                f"[generate_argocd] is under repo? : {git.git_repo_for_argo.resolve() in output_file.resolve().parents}")
+                f"[generate_argocd] is under repo? : {git.git_repo_to_do_actions.resolve() in output_file.resolve().parents}")
 
             output_file.write_text(
                 rendered,
                 encoding="utf-8",
             )
-        if not git.get_current_branch() == "master":
+        if not git.get_current_branch() == "master" and not git.get_current_branch() == "main":
             git.git_add_commit_push(f"added argocd objects for tenant: {request.tenant}, lifecycle: {request.lifecycle}, application: {request.application}" )

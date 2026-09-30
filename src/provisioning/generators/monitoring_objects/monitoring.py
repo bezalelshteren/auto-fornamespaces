@@ -3,48 +3,38 @@ import shutil
 
 from jinja2 import Environment, FileSystemLoader
 
-from ...config.settings import NAMESPACE_TEMPLATES_DIR
+from ...config.settings import MONITORING_TEMPLATES_DIR
 from ...models.git_services import GitActions
 from ...models.provision_request import ProvisionRequest
 from ...services.naming import build_names
 
 
-def generate_namespace(
+def generate_monitoring(
     git: GitActions,
     request: ProvisionRequest,
-    namespace_output_dir: Path,
-    namespace_output_dir_for_yahalom: Path,
+    monitoring_output_dir: Path,
 ) -> None:
     """
-    Generates Kubernetes Namespace YAML objects.
+    Generates Kubernetes monitoring stack YAML objects.
 
-    The namespace object is generated from a Jinja2 template
+    The monitoring object is generated from a Jinja2 template
     according to the ProvisionRequest.
     """
 
     # Namespace provisioning is disabled
-    if not request.namespace_config.enabled:
+    if not request.monitoring.enabled or request.namespace_config.customer_yahalom:
         return
 
     # Build all names required by the templates
     names = build_names(request)
 
 
-    if request.namespace_config.customer_yahalom:
-        template_dir = (
-            NAMESPACE_TEMPLATES_DIR
-            / "namespace-for-yahalom"
-        )
+    template_dir = (
+        MONITORING_TEMPLATES_DIR
+        / "monitoring_stack_inges"
+    )
 
-        output_dir = namespace_output_dir_for_yahalom
-
-    else:
-        template_dir = (
-            NAMESPACE_TEMPLATES_DIR
-            / "namespace-for-all-customers"
-        )
-
-        output_dir = namespace_output_dir
+    output_dir = monitoring_output_dir
 
     environment = Environment(
         loader=FileSystemLoader(template_dir)

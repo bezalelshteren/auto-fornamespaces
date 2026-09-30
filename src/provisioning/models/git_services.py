@@ -1,408 +1,326 @@
 from pathlib import Path
-# from ..config.settings import GIT_REPO_PATH, GIT_REPO_FOR_ARGOCD_OBJECTS
+import re
 import subprocess
 
-GIT_REPO_PATH = Path(__file__).resolve().parents[3] / "git-repos" 
+
+_HINTS = [
+    (
+        ("not found in upstream", "couldn't find remote ref",
+         "did not match any file", "unknown revision",
+         "ambiguous argument 'head'"),
+        "The branch does not exist. If the REMOTE repo is empty (no commits "
+        "yet) create an initial commit on it first: "
+        "git checkout -b main ; add a file ; git commit ; git push -u origin main. "
+        "Otherwise check the branch name.",
+    ),
+    (
+        ("no tracking information", "no upstream"),
+        "The local branch is not linked to a remote branch. "
+        "Run: git push -u origin <branch> (or make sure the remote branch exists).",
+    ),
+    (
+        ("repository not found", "does not appear to be a git repository"),
+        "Check the repo URL: it must be a FULL url (https://... or git@...), "
+        "with no spaces or newlines, and you need access to the repo.",
+    ),
+    (
+        ("could not resolve host", "unable to access"),
+        "Network problem (VPN / proxy / DNS) or a wrong host in the URL.",
+    ),
+    (
+        ("authentication failed", "could not read username",
+         "terminal prompts disabled", "permission denied"),
+        "Credentials problem. The process running the server has no usable "
+        "login for this repo (token / SSH key / credential manager).",
+    ),
+    (
+        ("tell me who you are", "empty ident", "unable to auto-detect email"),
+        "Git has no identity configured. Run: git config --global user.name "
+        "\"Name\" ; git config --global user.email \"mail@example.com\"",
+    ),
+    (
+        ("non-fast-forward", "fetch first", "[rejected]"),
+        "The remote branch has commits you don't have locally. Pull/rebase first.",
+    ),
+    (
+        ("would be overwritten", "please commit your changes or stash"),
+        "There are uncommitted local changes blocking this operation.",
+    ),
+    (
+        ("dubious ownership",),
+        "Git refuses a folder owned by another user. "
+        "Run: git config --global --add safe.directory <path>",
+    ),
+    (
+        ("already exists and is not an empty directory",),
+        "The target folder already exists and is not empty. Delete or rename it.",
+    ),
+]
+
+
+def _mask(text: str) -> str:
+    """Hide credentials embedded in URLs (https://user:token@host -> https://***@host)."""
+    return re.sub(r"://[^/@\s]+@", "://***@", text)
+
+
+def _hint_for(message: str) -> str | None:
+    lowered = message.lower()
+    for keywords, hint in _HINTS:
+        if any(k in lowered for k in keywords):
+            return hint
+    return None
+
+
+def _fail(where: str, cmd, stderr: str = "", stdout: str = "") -> None:
+    """Print a failure: the command, git's own message, and a hint if we know one."""
+    print(f"[{where}] FAILED: {_mask(' '.join(str(c) for c in cmd))}")
+
+    detail = _mask((stderr or stdout or "").strip())
+    for line in detail.splitlines():
+        print(f"    {line}")
+
+    hint = _hint_for(detail)
+    if hint:
+        print(f"    -> {hint}")
+
+
+def _run_git(args: list[str], cwd=None, check: bool = True) -> subprocess.CompletedProcess:
+    """Run a git command, printing the command first. Output is captured, not printed."""
+    print(f"$ {_mask('git ' + ' '.join(args))}")
+    return subprocess.run(
+        ["git", *args],
+        cwd=cwd,
+        capture_output=True,
+        text=True,
+        check=check,
+    )
+
+
+def _git_missing(where: str, error: OSError) -> None:
+    print(
+        f"[{where}] FAILED to start git: {error}\n"
+        f"    -> Is git installed and on the PATH of the process running the server? "
+        f"(Restart the server after changing PATH.)"
+    )
+
 
 class GitActions:
 
-    def __init__(self, git_repo_to_clone):
-        self.git_repo_path = GIT_REPO_PATH
-        self.git_repo_to_clone = git_repo_to_clone
-        self.git_repo_for_argo = self.git_repo_path / "argocd-registry"
+    def __init__(self, git_repo_to_clone, git_repo_to_do_actions: Path):
+        # strip(): a stray "\n" in the URL (e.g. from a multi-line string in
+        # settings) makes git treat it as a bad path.
+        self.git_repo_to_clone = str(git_repo_to_clone).strip()
+        self.git_repo_to_do_actions = Path(git_repo_to_do_actions)
 
-        print(f"[GitActions] git_repo_path     = {self.git_repo_path}")
-        print(f"[GitActions] git_repo_for_argo = {self.git_repo_for_argo}")
-        print(f"[GitActions] git_repo_to_clone = {self.git_repo_to_clone}")
-
-
-
+        print(
+            f"[GitActions] clone_url={_mask(self.git_repo_to_clone)}  "
+            f"local_repo={self.git_repo_to_do_actions}"
+        )
 
     def directory_exists(self) -> bool:
         """
         Checks whether the Git repository directory exists.
+        Prints only when something is wrong.
         """
-        if not self.git_repo_for_argo.exists():
+        repo = self.git_repo_to_do_actions
+
+        if not repo.exists():
+            print(f"[directory_exists] FAILED: directory does not exist: {repo}")
+            return False
+
+        if not repo.is_dir():
+            print(f"[directory_exists] FAILED: path exists but is not a directory: {repo}")
+            return False
+
+        if not (repo / ".git").exists():
             print(
-                f"Error: directory does not exist: "
-                f"{self.git_repo_for_argo}"
+                f"[directory_exists] FAILED: directory exists but is not a Git "
+                f"repository (no .git inside): {repo}\n"
+                f"    -> If it only holds leftovers from a failed run, delete it "
+                f"and let clone_or_update clone it again."
             )
             return False
 
-        if not self.git_repo_for_argo.is_dir():
-            print(
-                f"Error: path exists but is not a directory: "
-                f"{self.git_repo_for_argo}"
-            )
-            return False
-
-        if not (self.git_repo_for_argo / ".git").exists():
-            print(
-                f"Error: directory exists but is not a Git repository: "
-                f"{self.git_repo_for_argo}"
-            )
-            return False
-
-        print(f"[directory_exists] OK -> {self.git_repo_for_argo}")
         return True
-
-
 
     def get_current_branch(self) -> str | None:
         """
         Returns the current branch name of the Git repository.
-        If the path is not a Git repository, returns None.
+        If the path is not a Git repository (or has no commits yet), returns None.
         """
 
-        # FIX: this condition was inverted (`if self.directory_exists(): return None`),
-        # which returned None exactly when the repo DID exist, and otherwise fell
-        # through into subprocess.run() with a cwd that doesn't exist.
         if not self.directory_exists():
-            print("[get_current_branch] repo does not exist, returning None")
             return None
 
         try:
-            print(f"$ git rev-parse --abbrev-ref HEAD   (cwd={self.git_repo_for_argo})")
             result = subprocess.run(
                 ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-                cwd=self.git_repo_for_argo,
+                cwd=self.git_repo_to_do_actions,
                 capture_output=True,
                 text=True,
                 check=True
             )
-            print(f"  stdout: {result.stdout.strip()}")
             return result.stdout.strip()
         except subprocess.CalledProcessError as e:
-            print(f"Error getting current Git branch: {e}")
-            print(f"  stderr: {e.stderr}")
+            _fail("get_current_branch", e.cmd, e.stderr, e.stdout)
+            return None
+        except OSError as e:
+            _git_missing("get_current_branch", e)
             return None
 
-    def clone_or_update(self, target_revision: str = "main") -> str|None:
+    def clone_or_update(self, target_revision: str = "main") -> str | None:
         """
-        Clones the specified Git repository to the git_repo_path.
-        If the repository already exists, it will be updated to the target revision.
-        Returns True if successful, False otherwise.
+        Clones the specified Git repository to git_repo_to_do_actions.
+        If the repository already exists, it is updated to the target revision.
+        Returns a status message if successful, None otherwise.
         """
 
         print(f"[clone_or_update] target_revision={target_revision}")
 
-        # Make sure the parent folder exists before we try to clone into it.
-        self.git_repo_path.mkdir(parents=True, exist_ok=True)
+        repo = self.git_repo_to_do_actions
 
-        if self.git_repo_for_argo.exists():
-            # If the directory exists, check if it's a Git repository
-            if self.directory_exists():
-                # Pull the latest changes
-                try:
-                    print(f"$ git fetch   (cwd={self.git_repo_for_argo})")
-                    r = subprocess.run(
-                        ["git", "fetch"],
-                        cwd=self.git_repo_for_argo,
-                        capture_output=True,
-                        text=True,
-                        check=True
-                    )
-                    print(f"  stdout: {r.stdout.strip()}  stderr: {r.stderr.strip()}")
-
-                    print(f"$ git checkout {target_revision}   (cwd={self.git_repo_for_argo})")
-                    r = subprocess.run(
-                        ["git", "checkout", target_revision],
-                        cwd=self.git_repo_for_argo,
-                        capture_output=True,
-                        text=True,
-                        check=True
-                    )
-                    print(f"  stdout: {r.stdout.strip()}  stderr: {r.stderr.strip()}")
-
-                    print(f"$ git pull   (cwd={self.git_repo_for_argo})")
-                    r = subprocess.run(
-                        ["git", "pull"],
-                        cwd=self.git_repo_for_argo,
-                        capture_output=True,
-                        text=True,
-                        check=True
-                    )
-                    print(f"  stdout: {r.stdout.strip()}  stderr: {r.stderr.strip()}")
-
-                    print(f"[clone_or_update] Repository updated to {target_revision}.")
-                    return f"Repository updated to {target_revision}."
-                except subprocess.CalledProcessError as e:
-                    print(f"Error updating Git repository: {e}")
-                    print(f"  stderr: {e.stderr}")
+        try:
+            if repo.exists():
+                # directory_exists() already explains what is wrong
+                if not self.directory_exists():
                     return None
-            else:
-                print(f"Directory {self.git_repo_path} exists but is not a Git repository.")
-                return None
-        else:
-            # Clone the repository
-            try:
-                # FIX: clone destination was self.git_repo_path (the parent
-                # "git-repos" folder), while directory_exists()/every other
-                # method checks self.git_repo_for_argo ("git-repos/argocd-registry").
-                # Those two never matched, so right after a "successful" clone,
-                # directory_exists() still reported False. Cloning into
-                # git_repo_for_argo now, so the two paths agree.
-                print(
-                    f"$ git clone -b {target_revision} {self.git_repo_to_clone} "
-                    f"{self.git_repo_for_argo}"
-                )
-                r = subprocess.run(
-                    ["git", "clone", "-b", target_revision, self.git_repo_to_clone, str(self.git_repo_for_argo)],
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                print(f"  stdout: {r.stdout.strip()}  stderr: {r.stderr.strip()}")
-                print(f"[clone_or_update] Repository {self.git_repo_to_clone} cloned to {self.git_repo_for_argo}.")
-                return f"Repository {self.git_repo_to_clone} cloned to {self.git_repo_for_argo}."
-            except subprocess.CalledProcessError as e:
-                print(f"Error cloning Git repository: {e}")
-                print(f"  stderr: {e.stderr}")
-                return None
+
+                # Update an existing clone
+                _run_git(["fetch"], cwd=repo)
+                _run_git(["checkout", target_revision], cwd=repo)
+                _run_git(["pull"], cwd=repo)
+
+                message = f"Repository updated to {target_revision}."
+                print(f"[clone_or_update] OK: {message}")
+                return message
+
+            # Clone the repository.
+            # Clone into git_repo_to_do_actions (not its parent), so that
+            # directory_exists() and every other method agree on the location.
+            # No cwd here: the folder does not exist yet.
+            _run_git(["clone", "-b", target_revision, self.git_repo_to_clone, str(repo)])
+
+            message = f"Repository cloned to {repo}."
+            print(f"[clone_or_update] OK: {message}")
+            return message
+
+        except subprocess.CalledProcessError as e:
+            _fail("clone_or_update", e.cmd, e.stderr, e.stdout)
+            return None
+        except OSError as e:
+            _git_missing("clone_or_update", e)
+            return None
 
     def checkout_branch(self, branch_name: str) -> bool:
         """
-        Creates and checks out a new Git branch.
+        Creates and checks out a Git branch (or just checks it out if it
+        already exists from an earlier run).
 
         Returns:
-            True if the branch was created and checked out successfully.
+            True if the branch is checked out.
             False if the operation failed.
         """
 
         print(f"[checkout_branch] branch_name={branch_name}")
 
         if not self.directory_exists():
-            print(
-                f"Git repository directory does not exist: "
-                f"{self.git_repo_path}"
-            )
             return False
 
+        repo = self.git_repo_to_do_actions
+
         try:
-            # FIX: `git checkout -b` only ever creates a NEW branch. If this
-            # branch was already created by an earlier run for the same
-            # tenant/app (exactly what happened in your logs), `-b` fails
-            # with "a branch named ... already exists" and nothing switches
-            # branch at all — you're left on whatever branch you were on
-            # before (main), and the push-guard then correctly refuses it.
-            # So: check first whether the branch already exists, and if so
-            # just check it out normally instead of trying to create it again.
-            print(f"$ git rev-parse --verify --quiet {branch_name}   (cwd={self.git_repo_for_argo})")
-            exists_check = subprocess.run(
+            # `git checkout -b` only creates NEW branches. If an earlier run for
+            # the same tenant/app already created it, -b fails, so check first.
+            # (Silent probe - its exit code is the answer, nothing to print.)
+            branch_exists = subprocess.run(
                 ["git", "rev-parse", "--verify", "--quiet", branch_name],
-                cwd=self.git_repo_for_argo,
+                cwd=repo,
                 capture_output=True,
                 text=True,
-            )
-            print(f"  exit code: {exists_check.returncode}")
+            ).returncode == 0
 
-            if exists_check.returncode == 0:
-                print(f"[checkout_branch] branch '{branch_name}' already exists — checking it out instead of creating it")
+            if branch_exists:
                 git_checkout_args = ["checkout", branch_name]
             else:
                 git_checkout_args = ["checkout", "-b", branch_name]
 
-            print(f"$ git {' '.join(git_checkout_args)}   (cwd={self.git_repo_for_argo})")
-            result = subprocess.run(
-                ["git", *git_checkout_args],
-                cwd=self.git_repo_for_argo,
-                capture_output=True,
-                text=True,
-            )
-
-            print(f"  exit code: {result.returncode}")
-            print(f"  stdout: {result.stdout}")
-            print(f"  stderr: {result.stderr}")
+            result = _run_git(git_checkout_args, cwd=repo, check=False)
 
             if result.returncode != 0:
-                print(
-                    f"Error checking out branch '{branch_name}'."
-                )
-
-                print("Git stdout:")
-                print(result.stdout)
-
-                print("Git stderr:")
-                print(result.stderr)
-
+                _fail("checkout_branch", ["git", *git_checkout_args], result.stderr, result.stdout)
                 return False
 
-            print(
-                f"Successfully created and checked out branch "
-                f"'{branch_name}'."
-            )
-
+            state = "already existed, checked out" if branch_exists else "created and checked out"
+            print(f"[checkout_branch] OK: branch '{branch_name}' {state}.")
             return True
 
         except OSError as e:
-            print(f"Failed to execute Git: {e}")
+            _git_missing("checkout_branch", e)
             return False
 
-    # def git_add_commit_push(self, commit_message: str) -> bool:
-    #     """
-    #     Stages all changes, commits them with the provided message,
-    #     and pushes to the current branch.
-    #     Returns True if successful, False otherwise.
-    #     """
-    #
-    #     if not self.directory_exists():
-    #         print(f"Directory {self.git_repo_path} is not a Git repository.")
-    #         return False
-    #
-    #     if self.get_current_branch() == "main":
-    #         print("Warning: You are on the 'main' branch. It's recommended to work on a feature branch.")
-    #         return False
-    #     try:
-    #         subprocess.run(
-    #             ["git", "add", "."],
-    #             cwd=self.git_repo_path,
-    #             capture_output=True,
-    #             text=True,
-    #             check=True
-    #         )
-    #         subprocess.run(
-    #             ["git", "commit", "-m", commit_message],
-    #             cwd=self.git_repo_path,
-    #             capture_output=True,
-    #             text=True,
-    #             check=True
-    #         )
-    #         subprocess.run(
-    #             ["git", "push"],
-    #             cwd=self.git_repo_path,
-    #             capture_output=True,
-    #             text=True,
-    #             check=True
-    #         )
-    #         return True
-    #     except subprocess.CalledProcessError as e:
-    #         print(f"Error during git add/commit/push: {e}")
-    #         return False
-    #
-    #
-    #
-    # def delete_repo_localy(self) -> bool:
-    #     """1
-    #     Deletes the local Git repository directory.
-    #     Returns True if successful, False otherwise.
-    #     """
-    #     if self.git_repo_path.exists():
-    #         try:
-    #             subprocess.run(
-    #                 ["rm", "-rf", str(self.git_repo_path)],
-    #                 capture_output=True,
-    #                 text=True,
-    #                 check=True
-    #             )
-    #             return True
-    #         except subprocess.CalledProcessError as e:
-    #             print(f"Error deleting Git repository: {e}")
-    #             return False
-    #     else:
-    #         print(f"Directory {self.git_repo_path} does not exist.")
-    #         return False
     def git_add_commit_push(self, commit_message: str) -> bool:
         """
         Stages all changes, commits them, and pushes the current branch.
+        Returns True only if something was actually pushed.
         """
 
         print(f"[git_add_commit_push] commit_message={commit_message!r}")
 
         if not self.directory_exists():
-            print(
-                f"Directory {self.git_repo_path} "
-                f"is not a Git repository."
+            return False
 
+        repo = self.git_repo_to_do_actions
+
+        current_branch = self.get_current_branch()
+
+        # Without this guard the code would run "git push -u origin None".
+        if current_branch is None or current_branch == "HEAD":
+            print(
+                "[git_add_commit_push] FAILED: could not determine the current "
+                "branch (repo without commits, or detached HEAD). Nothing was pushed."
             )
             return False
 
-        current_branch = self.get_current_branch()
-        print(f"[git_add_commit_push] current_branch={current_branch}")
-
         if current_branch == "main" or current_branch == "master":
-            print("Refusing to push directly to main.")
+            print(f"[git_add_commit_push] Refusing to push directly to '{current_branch}'.")
             return False
 
         try:
             # git add .
-            print(f"$ git add .   (cwd={self.git_repo_for_argo})")
-            result = subprocess.run(
-                ["git", "add", "."],
-                cwd=self.git_repo_for_argo,
-                capture_output=True,
-                text=True,
-            )
-            print(f"  exit code: {result.returncode}  stdout: {result.stdout}  stderr: {result.stderr}")
-
+            result = _run_git(["add", "."], cwd=repo, check=False)
             if result.returncode != 0:
-                print("Git add failed:")
-                print(result.stderr)
+                _fail("git_add_commit_push", ["git", "add", "."], result.stderr, result.stdout)
                 return False
 
             # Check whether there are changes to commit
-            print(f"$ git status --porcelain   (cwd={self.git_repo_for_argo})")
-            result = subprocess.run(
-                ["git", "status", "--porcelain"],
-                cwd=self.git_repo_for_argo,
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            print(f"  stdout: {result.stdout}")
+            result = _run_git(["status", "--porcelain"], cwd=repo, check=False)
+            if result.returncode != 0:
+                _fail("git_add_commit_push", ["git", "status", "--porcelain"], result.stderr, result.stdout)
+                return False
 
             if not result.stdout.strip():
-                print("No changes to commit.")
+                print(
+                    "[git_add_commit_push] Nothing to commit (files are identical "
+                    "to what the branch already has). Nothing was pushed."
+                )
                 return False
 
             # git commit
-            print(f"$ git commit -m {commit_message!r}   (cwd={self.git_repo_for_argo})")
-            result = subprocess.run(
-                ["git", "commit", "-m", commit_message],
-                cwd=self.git_repo_for_argo,
-                capture_output=True,
-                text=True,
-            )
-            print(f"  exit code: {result.returncode}")
-
+            result = _run_git(["commit", "-m", commit_message], cwd=repo, check=False)
             if result.returncode != 0:
-                print("Git commit failed:")
-                print("STDOUT:")
-                print(result.stdout)
-                print("STDERR:")
-                print(result.stderr)
+                _fail("git_add_commit_push", ["git", "commit", "-m", commit_message], result.stderr, result.stdout)
                 return False
 
             # git push
-            print(f"$ git push -u origin {current_branch}   (cwd={self.git_repo_for_argo})")
-            result = subprocess.run(
-                ["git", "push", "-u", "origin", current_branch],
-                cwd=self.git_repo_for_argo,
-                capture_output=True,
-                text=True,
-            )
-            print(self.git_repo_path , "**********************")
-            print(f"  exit code: {result.returncode}")
+            push_args = ["push", "-u", "origin", current_branch]
+            result = _run_git(push_args, cwd=repo, check=False)
             if result.returncode != 0:
-                print("Git push failed:")
-                print("STDOUT:")
-                print(result.stdout)
-                print("STDERR:")
-                print(result.stderr)
+                _fail("git_add_commit_push", ["git", *push_args], result.stderr, result.stdout)
                 return False
 
-            print(f"Successfully pushed branch '{current_branch}'.")
+            print(f"[git_add_commit_push] OK: pushed branch '{current_branch}'.")
             return True
 
         except OSError as e:
-            print(f"Failed to execute Git command: {e}")
+            _git_missing("git_add_commit_push", e)
             return False
-
-# git = GitActions(git_repo_to_clone="https://github.com/bezalelshteren/argocd-registry.git"
-# )
-# m = git.clone_or_update()
-# print(m)
-# git.checkout_branch("automation/demo-branch")
-# v = git.get_current_branch()
-# print(v)
-# c = git.git_add_commit_push("frhu")
-# print(c)
