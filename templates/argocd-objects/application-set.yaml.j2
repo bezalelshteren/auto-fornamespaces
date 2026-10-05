@@ -1,48 +1,38 @@
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
-
 metadata:
-  name: {{ names.application_set_name }}
-  namespace: argocd
-
+  name: {{ names.cluster }}-{{ names.tenant }}-{{ names.application }}
+  namespace: blackops-argocd-tenants
   labels:
-    tenant: {{ request.tenant }}
-    lifecycle: {{ request.lifecycle }}
-
+    blackops/managed: "true"
+    blackops/monitored: "true"
+    blackops/tenant: {{ request.tenant }}
+    blackops/part-of: "argocd"
 spec:
+  syncPolicy:
+    preserveResourcesOnDeletion: true
   generators:
-    - list:
-        elements:
-{% for application in request.applications %}
-          - name: {{ application.name }}
-            path: {{ application.path }}
-            namespace: {{ application.namespace }}
-{% endfor %}
-
+    - git:
+        repoURL: {{ request.git.repo_url }}
+        revision: {{ request.git.target_revision }}
+        directories:
+          - path: {{ names.lifecycle }} /*
   template:
     metadata:
-      name: '{{"{{"}}name{{"}}"}}'
-
+      name: {{ path.basename }}
       labels:
-        tenant: {{ request.tenant }}
-        lifecycle: {{ request.lifecycle }}
-
+        blackops/managed: "true"
+        blackops/monitored: "true"
+        blackops/tenant: {{ request.tenant }}
+        blackops/part-of: {{ path.basename }}
     spec:
-      project: {{ names.project_name }}
-
+      project: {{ names.tenant }}-{{ names.lifecycle }}
       source:
         repoURL: {{ request.git.repo_url }}
         targetRevision: {{ request.git.target_revision }}
         path: '{{"{{"}}path{{"}}"}}'
-
+        directory:
+          recurse: true
       destination:
-        server: server
-        namespace: '{{"{{"}}namespace{{"}}"}}'
-
-      syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
-
-        syncOptions:
-          - CreateNamespace=true
+        name: {{ request.cluster }}
+        namespace: '{{"{{"}}namespace{{"}}"}}'-*

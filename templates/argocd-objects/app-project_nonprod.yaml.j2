@@ -1,24 +1,23 @@
 apiVersion: argoproj.io/v1alpha1
 kind: AppProject
-
 metadata:
-  name: {{ names.project_name }}
-  namespace: argocd
-
-  labels:
-    tenant: {{ request.tenant }}
-    lifecycle: {{ request.lifecycle }}
-
+  name: {{ names.tenant }}-{{ names.lifecycle }}
+  namespace: blackops-argocd-tenants
 spec:
-  description: "{{ request.tenant }} - {{ request.lifecycle }}"
-
-  sourceRepos:
-    - {{ request.git.repo_url }}
-
-  destinations:
-    - namespace: {{ names.namespace }}
-      server: server
-
-  namespaceResourceWhitelist:
+  clusterResourceWhitelist:
     - group: "*"
       kind: "*"
+  namespaceResourceBlacklist:
+    - group: "*"
+      kind: ResourceQuota
+  roles:
+    - groups:
+      - group: {{ request.ldap_group }}
+        name: admin
+        policies:
+          - p, proj:{{ names.tenant }}-{{ names.lifecycle }}:admin, applications, *, {{ names.tenant }}-{{ names.lifecycle }}/*, allow
+  destinations:
+    - namespace: {{ names.tenant }}-*
+      name: {{ request.cluster }}
+  sourceRepos:
+    - {{ request.git.repo_url }}

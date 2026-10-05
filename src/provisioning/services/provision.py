@@ -4,7 +4,7 @@ from ..generators.argocd_objects.argocd import generate_argocd
 from ..models.provision_request import ProvisionRequest
 from ..services.argocd_checks import run_checks
 from ..generators.namespace_objects.namespace import generate_namespace
-from ..generators.monitoring_objects.monitoring import generate_monitoring_ingest
+from ..generators.monitoring_objects.monitoring import generate_monitoring_ingest,generate_monitoring_export
 
 
 def provision_argo(
@@ -141,7 +141,7 @@ def provision_namespace(request: ProvisionRequest) -> None:
         return
 
 
-def provision_monitoring(request: ProvisionRequest) -> None:
+def provision_monitoring_ingest(request: ProvisionRequest) -> None:
     if not request.monitoring.enabled:
         return
 
@@ -160,6 +160,30 @@ def provision_monitoring(request: ProvisionRequest) -> None:
 
 
     generate_monitoring_ingest(
+        git=git_monitoring,
+        request=request,
+        monitoring_output_dir=monitoring_output_dir,
+    )
+
+def provision_monitoring_export(request: ProvisionRequest) -> None:
+    if not request.monitoring.enabled:
+        return
+
+    git_monitoring = GitActions(
+        git_repo_to_clone=GIT_REPO_FOR_MONTORING_OBJECTS,
+        git_repo_to_do_actions=MONITORING_DIR_TARGET,
+    )
+
+
+    monitoring_output_dir = (
+        MONITORING_DIR_TARGET
+        / request.tenant
+        / "monitoring"
+        / request.application
+    )
+
+
+    generate_monitoring_export(
         git=git_monitoring,
         request=request,
         monitoring_output_dir=monitoring_output_dir,

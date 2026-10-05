@@ -1,0 +1,178 @@
+{
+  "name": "Jira Approved -> FastAPI Provisioning",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jira-approved",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "a1111111-1111-4111-8111-111111111111",
+      "name": "Jira Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "b2222222-2222-4222-8222-222222222222"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// Jira -> normalized provisioning request\n// Supports BOTH:\n//\n// 1. Jira payload containing:\n//    {\n//      \"issue\": {...},\n//      \"provisionRequest\": {...}\n//    }\n//\n// 2. Direct provisioning request:\n//    {\n//      \"tenant\": \"...\",\n//      \"team\": \"...\",\n//      \"application\": \"...\",\n//      ...\n//    }\n// ============================================================\n\nconst input = $input.first().json;\nconst body = input.body ?? input;\n\nconst issue = body.issue ?? null;\nconst jiraFields = issue?.fields ?? {};\n\n// ------------------------------------------------------------\n// Convert Jira ADF description to plain text\n// ------------------------------------------------------------\n\nfunction adfToText(n) {\n  if (!n) return '';\n\n  if (n.type === 'text') {\n    return n.text || '';\n  }\n\n  if (n.type === 'hardBreak') {\n    return '\\n';\n  }\n\n  const inner = (n.content || [])\n    .map(adfToText)\n    .join('');\n\n  const blocks = [\n    'paragraph',\n    'heading',\n    'listItem',\n    'codeBlock',\n    'blockquote'\n  ];\n\n  return blocks.includes(n.type)\n    ? inner + '\\n'\n    : inner;\n}\n\n// ------------------------------------------------------------\n// Simplify Jira custom fields\n// ------------------------------------------------------------\n\nfunction simplify(v) {\n  if (v === null || v === undefined) {\n    return undefined;\n  }\n\n  if (Array.isArray(v)) {\n    const result = v\n      .map(simplify)\n      .filter(x => x !== undefined);\n\n    return result.length ? result : undefined;\n  }\n\n  if (typeof v === 'object') {\n    if (v.type === 'doc') {\n      return adfToText(v).trim();\n    }\n\n    if ('value' in v && typeof v.value !== 'object') {\n      return v.value;\n    }\n\n    if (v.displayName) {\n      return v.displayName;\n    }\n\n    if (typeof v.name === 'string') {\n      return v.name;\n    }\n\n    return v;\n  }\n\n  return v;\n}\n\n// ------------------------------------------------------------\n// Determine Jira status\n// ------------------------------------------------------------\n\nlet status =\n  body.status ??\n  jiraFields.status?.name ??\n  jiraFields.status ??\n  null;\n\n// ------------------------------------------------------------\n// Determine Jira issue key\n// ------------------------------------------------------------\n\nconst issueKey =\n  body.issueKey ??\n  issue?.key ??\n  null;\n\n// ------------------------------------------------------------\n// Determine who approved the Jira issue\n// ------------------------------------------------------------\n\nconst approvedBy =\n  body.approvedBy ??\n  body.user?.displayName ??\n  null;\n\n// ------------------------------------------------------------\n// Find provisionRequest\n// ------------------------------------------------------------\n\nlet provisionRequest = null;\n\n// ------------------------------------------------------------\n// CASE 1:\n// The webhook already contains provisionRequest\n// ------------------------------------------------------------\n\nif (\n  body.provisionRequest &&\n  typeof body.provisionRequest === 'object'\n) {\n  provisionRequest = body.provisionRequest;\n}\n\n// ------------------------------------------------------------\n// CASE 2:\n// Direct provisioning JSON\n//\n// Example:\n// {\n//   \"tenant\": \"tenant\",\n//   \"team\": \"devops\",\n//   \"application\": \"aoutomation_namespace\",\n//   \"lifecycle\": \"dev\",\n//   ...\n// }\n// ------------------------------------------------------------\n\nif (!provisionRequest) {\n  const looksLikeProvisionRequest =\n    body.tenant !== undefined &&\n    body.application !== undefined &&\n    body.lifecycle !== undefined;\n\n  if (looksLikeProvisionRequest) {\n    provisionRequest = body;\n\n    // The endpoint itself represents the approved Jira flow.\n    // If no Jira status was supplied, treat this direct request as approved.\n    if (!status) {\n      status = 'Approved';\n    }\n  }\n}\n\n// ------------------------------------------------------------\n// CASE 3:\n// Custom Data containing \"fields\"\n// ------------------------------------------------------------\n\nif (!provisionRequest && body.fields) {\n  provisionRequest = body.fields;\n}\n\n// ------------------------------------------------------------\n// CASE 4:\n// Normal Jira issue payload\n// ------------------------------------------------------------\n\nif (!provisionRequest && Object.keys(jiraFields).length > 0) {\n  provisionRequest = {};\n\n  for (const [key, value] of Object.entries(jiraFields)) {\n    const simplified = simplify(value);\n\n    if (simplified !== undefined && simplified !== '') {\n      provisionRequest[key] = simplified;\n    }\n  }\n}\n\n// ------------------------------------------------------------\n// Validate provisioning request\n// ------------------------------------------------------------\n\nif (\n  !provisionRequest ||\n  typeof provisionRequest !== 'object' ||\n  Array.isArray(provisionRequest)\n) {\n  throw new Error(\n    'No valid provisionRequest was found in the Jira webhook payload.'\n  );\n}\n\n// ------------------------------------------------------------\n// Return normalized object\n// ------------------------------------------------------------\n\nreturn [\n  {\n    json: {\n      issueKey,\n      status,\n      approvedBy,\n      provisionRequest,\n      jiraPayload: body\n    }\n  }\n];\n"
+      },
+      "id": "c3333333-3333-4333-8333-333333333333",
+      "name": "Extract + Build Provision Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "d4444444-4444-4444-8444-444444444444",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "Approved",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "e5555555-5555-4555-8555-555555555555",
+      "name": "Is Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        500,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:8000/provision",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.provisionRequest }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "f7777777-7777-4777-8777-777777777777",
+      "name": "Call FastAPI Provision",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        760,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const response = $input.first().json;\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: 'FastAPI provisioning request completed',\n      fastApiResponse: response\n    }\n  }\n];\n"
+      },
+      "id": "18888888-8888-4888-8888-888888888888",
+      "name": "Provisioning Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1020,
+        -100
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [\n  {\n    json: {\n      success: false,\n      message: 'Jira issue is not Approved',\n      issueKey: $json.issueKey,\n      status: $json.status\n    }\n  }\n];\n"
+      },
+      "id": "29999999-9999-4999-8999-999999999999",
+      "name": "Ignored - Not Approved",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        760,
+        120
+      ]
+    }
+  ],
+  "connections": {
+    "Jira Webhook": {
+      "main": [
+        [
+          {
+            "node": "Extract + Build Provision Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract + Build Provision Request": {
+      "main": [
+        [
+          {
+            "node": "Is Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Approved?": {
+      "main": [
+        [
+          {
+            "node": "Call FastAPI Provision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ignored - Not Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call FastAPI Provision": {
+      "main": [
+        [
+          {
+            "node": "Provisioning Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "versionId": "3a3a3a3a-3333-4333-8333-333333333333",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
+

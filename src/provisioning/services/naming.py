@@ -5,6 +5,7 @@ def build_names(request: ProvisionRequest) -> dict[str, str]:
     tenant = request.tenant
     lifecycle = request.lifecycle
     application = request.application
+    cluster = request.cluster
 
     return {
         "tenant": tenant,

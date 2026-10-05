@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from .services.provision import provision_argo, provision_namespace ,provision_monitoring
+from .services.provision import provision_argo, provision_namespace ,provision_monitoring_export, provision_monitoring_ingest
 from .models.provision_request import ProvisionRequest
 
 
@@ -20,5 +20,6 @@ def create_provision(request: ProvisionRequest):
 
     result_argo = provision_argo(request=request)
     provision_namespace(request=request)
-    provision_monitoring(request=request)
+    provision_monitoring_ingest(request=request)
+    # provision_monitoring_export(request=request)
     return

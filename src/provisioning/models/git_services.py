@@ -168,7 +168,7 @@ class GitActions:
             _git_missing("get_current_branch", e)
             return None
 
-    def clone_or_update(self, target_revision: str = "main") -> str | None:
+    def clone_or_update(self, target_revision: str) -> str | None:
         """
         Clones the specified Git repository to git_repo_to_do_actions.
         If the repository already exists, it is updated to the target revision.
@@ -198,7 +198,7 @@ class GitActions:
             # Clone into git_repo_to_do_actions (not its parent), so that
             # directory_exists() and every other method agree on the location.
             # No cwd here: the folder does not exist yet.
-            _run_git(["clone", "-b", target_revision, self.git_repo_to_clone, str(repo)])
+            _run_git(["clone", self.git_repo_to_clone, str(repo)])
 
             message = f"Repository cloned to {repo}."
             print(f"[clone_or_update] OK: {message}")

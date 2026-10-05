@@ -1,5 +1,4 @@
 from pathlib import Path
-import shutil
 
 from jinja2 import Environment, FileSystemLoader
 
@@ -72,7 +71,7 @@ def generate_namespace(
         }
 
     # Make sure the Git repository exists and is up to date
-    if not git.clone_or_update():
+    if not git.clone_or_update(target_revision="master"):
         raise RuntimeError(
             f"Failed to clone/update Git repository: "
             f"{git.git_repo_to_do_actions}"

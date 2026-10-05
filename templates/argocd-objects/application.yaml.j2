@@ -1,31 +1,21 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
-
 metadata:
-  name: {{ names.application_name }}
-  namespace: argocd
-
+  name: {{ names.cluster }}-{{ names.tenant }}-{{ names.application_name }}
+  namespace: blackops-argocd-tenants
   labels:
-    tenant: {{ request.tenant }}
-    lifecycle: {{ request.lifecycle }}
-
+    blackops/managed: "true"
+    blackops/tenant: {{ names.tenant }}
 spec:
-  project: {{ names.project_name }}
-
+  project: {{ names.tenant }}-{{ names.lifecycle }}
   source:
     repoURL: {{ request.git.repo_url }}
     targetRevision: {{ request.git.target_revision }}
-    path: {{ request.git.path }}
-
-
+    path: {{ names.cluster }}
+    helm:
+      releaseName: {{ names.cluster }}-{{ names.lifecycle }}-{{ names.application_name }}
+      valueFiles:
+        - values.yaml
   destination:
-    server: server
+    name: {{ request.cluster }}
     namespace: {{ names.namespace }}
-
-  syncPolicy:
-    automated:
-      prune: true
-      selfHeal: true
-
-    syncOptions:
-      - CreateNamespace=true

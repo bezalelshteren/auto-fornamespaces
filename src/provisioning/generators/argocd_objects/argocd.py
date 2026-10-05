@@ -37,7 +37,7 @@ def generate_argocd(
     }
 
     templates: dict[str, tuple[Path, str]] = {}
-    if not git.clone_or_update():
+    if not git.clone_or_update(target_revision="master"):
         raise RuntimeError(
             f"Failed to clone/update Git repository: "
             f"{git.git_repo_to_do_actions}"

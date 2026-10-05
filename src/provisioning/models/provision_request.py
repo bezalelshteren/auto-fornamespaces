@@ -83,6 +83,7 @@ class MonitoringConfig(BaseModel):
 
 
 class ProvisionRequest(BaseModel):
+    cluster: str = Field(min_length=1)
     tenant: str = Field(min_length=1)
     team: str = Field(min_length=1)
     application: str = Field(min_length=1)
