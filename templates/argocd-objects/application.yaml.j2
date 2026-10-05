@@ -1,7 +1,7 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: {{ names.cluster }}-{{ names.tenant }}-{{ names.application_name }}
+  name: {{ request.cluster }}-{{ names.tenant }}-{{ names.application_name }}
   namespace: blackops-argocd-tenants
   labels:
     blackops/managed: "true"
@@ -11,9 +11,9 @@ spec:
   source:
     repoURL: {{ request.git.repo_url }}
     targetRevision: {{ request.git.target_revision }}
-    path: {{ names.cluster }}
+    path: {{ request.cluster }}
     helm:
-      releaseName: {{ names.cluster }}-{{ names.lifecycle }}-{{ names.application_name }}
+      releaseName: {{ request.cluster }}-{{ names.lifecycle }}-{{ names.application_name }}
       valueFiles:
         - values.yaml
   destination:
