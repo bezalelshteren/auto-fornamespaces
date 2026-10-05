@@ -13,6 +13,7 @@ def generate_namespace(
     request: ProvisionRequest,
     namespace_output_dir: Path,
     namespace_output_dir_for_yahalom: Path,
+    environment: str
 ) -> None:
     """
     Generates Kubernetes Namespace YAML objects.
@@ -49,9 +50,11 @@ def generate_namespace(
         loader=FileSystemLoader(template_dir)
     )
 
+
     # Data available inside the Jinja2 template
     if request.namespace_config.customer_yahalom:
         context = {
+            "cluster": environment,
             "request": request,
             "names": names,
             "namespace": {

@@ -12,7 +12,11 @@ GIT_REPO_FOR_NAMESPACES_OBJECTS = (
     "https://github.com/bezalelshteren/cluster-registry.git"
 )
 
-GIT_REPO_FOR_MONTORING_OBJECTS = (
+GIT_REPO_FOR_MONITORING_EXPORT = (
+    "https://github.com/bezalelshteren/monitoring_exporter.git"
+)
+
+GIT_REPO_FOR_MONITORING_INGEST = (
     "https://github.com/bezalelshteren/monitoring-registry.git"
 )
 
@@ -46,8 +50,11 @@ ARGO_DIR_TARGET = (
 NAMESPACE_DIR_TARGET = (
     BASE_DIR / "git-repos" / "cluster-registry"
 )
-MONITORING_DIR_TARGET = (
+MONITORING_DIR_TARGET_INGEST = (
     BASE_DIR / "git-repos" / "monitoring-registry"
+)
+MONITORING_DIR_TARGET_EXPORT = (
+    BASE_DIR / "git-repos" / "monitoring-exporter"
 )
 
 NAMESPACE_REPOSITORIES = {
@@ -56,8 +63,8 @@ NAMESPACE_REPOSITORIES = {
         "local_path": Path( BASE_DIR / "git-repos" / "cluster-registry"),
     },
     "prd1": {
-        "git_repo": "https://github.com/company/namespaces-prd.git",
-        "local_path": Path( BASE_DIR / "git-repos" / "cluster-registry" / "namespaces-prd"),
+        "git_repo": "https://github.com/bezalelshteren/prd1.git",
+        "local_path": Path( BASE_DIR / "git-repos" / "prd1" ),
     },"stg1": {
         "git_repo": "https://github.com/company/namespaces-stg.git",
         "local_path": Path( BASE_DIR / "git-repos" / "cluster-registry" / "namespaces-stg"),

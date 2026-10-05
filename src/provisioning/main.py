@@ -21,5 +21,5 @@ def create_provision(request: ProvisionRequest):
     result_argo = provision_argo(request=request)
     provision_namespace(request=request)
     provision_monitoring_ingest(request=request)
-    # provision_monitoring_export(request=request)
+    provision_monitoring_export(request=request)
     return

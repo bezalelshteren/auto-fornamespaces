@@ -171,11 +171,6 @@ def generate_monitoring_export(
         loader=FileSystemLoader(template_dir)
     )
 
-    # Data available inside the Jinja2 template
-    # context = {
-    #     "request": request,
-    #     "names": names,
-    # }
 
     # Make sure the Git repository exists and is up to date
     if not git.clone_or_update("master"):
@@ -201,7 +196,7 @@ def generate_monitoring_export(
         ".values-export.yaml.j2"
     )
     context = {
-        "namespace_name": request.application,
+        "namespace_name": names["namespace"],
         "namespace_ip": request.monitoring.ip,
         "namespace_ip_pmm": request.monitoring.ip_pmm,
         "namespace_ecs_id": request.monitoring.ecs_id,
