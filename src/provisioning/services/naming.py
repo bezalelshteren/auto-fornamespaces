@@ -8,6 +8,7 @@ def build_names(request: ProvisionRequest) -> dict[str, str]:
     cluster = request.cluster
 
     return {
+
         "tenant": tenant,
         "lifecycle": lifecycle,
         "chart_monitoring": "monitoring-stack-ingest",

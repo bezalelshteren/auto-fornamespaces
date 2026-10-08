@@ -1,0 +1,32 @@
+{
+  "cluster": "dev1",
+  "tenant": "rtemis",
+  "team": "rtemis",
+  "application": "buntis",
+  "lifecycle": "dev",
+  "ldap_group": "me",
+  "target_sites": [
+    "dev1"
+  ],
+  "git": {
+    "repo_url": "https://github.com/example/test-argocd-config.git",
+    "target_revision": "master",
+    "path": "dev/cds"
+  },
+  "namespace_config": {
+    "enabled": true,
+    "customer_yahalom": false
+  },
+  "argocd": {
+    "enabled": true,
+    "application": true,
+    "application_set": false
+  },
+  "monitoring": {
+    "enabled": true,
+    "ip": "127.0.0.1",
+    "ip_pmm": "127.00.0.2",
+    "ecs_id": "vfsdddddddddd",
+    "ecs_token": "dssssssssssssssv"
+  }
+}

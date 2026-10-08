@@ -14,6 +14,7 @@ def generate_argocd(
     decision: ProvisionDecision,
     app_project_output_dir: Path,
     applications_output_dir: Path,
+    site: str
 ) -> None:
     """
     Generates the Argo CD YAML objects according to the
@@ -34,6 +35,7 @@ def generate_argocd(
     context = {
         "request": request,
         "names": names,
+        "cluster": site,
     }
 
     templates: dict[str, tuple[Path, str]] = {}

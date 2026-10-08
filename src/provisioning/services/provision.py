@@ -4,77 +4,92 @@ from ..generators.argocd_objects.argocd import generate_argocd
 from ..models.provision_request import ProvisionRequest
 from ..services.argocd_checks import run_checks
 from ..generators.namespace_objects.namespace import generate_namespace
-from ..generators.monitoring_objects.monitoring import generate_monitoring_ingest,generate_monitoring_export
-
+from ..generators.monitoring_objects.monitoring import (generate_monitoring_ingest,generate_monitoring_export)
 
 def provision_argo(
     request: ProvisionRequest
 ) -> dict:
     """
-    Main provisioning workflow.
+    Provision Argo CD objects for every target site.
 
-    1. Determine the Git repository location.
-    2. Run provisioning checks.
-    3. Generate Argo CD objects according to the decisions.
+    All sites use the same Git repository.
+    Each site has its own directory inside the repository.
     """
 
     git_argo = GitActions(
         git_repo_to_clone=GIT_REPO_FOR_ARGOCD_OBJECTS,
-        git_repo_to_do_actions=ARGO_DIR_TARGET)
-
-    decision = run_checks(
-        request=request,
-        git_repo_path=ARGO_DIR_TARGET
+        git_repo_to_do_actions=ARGO_DIR_TARGET,
     )
 
-    app_project_output_dir = (
-        ARGO_DIR_TARGET
-        / "argocd_projects"
-        / request.tenant
-        / request.lifecycle
-    )
-    applications_output_dir = (
-        ARGO_DIR_TARGET
-        / "argocd_programs"
-        / request.tenant
-        / request.lifecycle
-    )
+    results = []
 
-    generate_argocd(
-        git=git_argo,
-        request=request,
-        decision=decision,
-        applications_output_dir=applications_output_dir,
-        app_project_output_dir=app_project_output_dir
+    for site in request.target_sites:
 
-    )
+        print(f"[provision_argo] site={site}")
+
+        # Each site has its own directory inside the same repository
+        site_dir = ARGO_DIR_TARGET
+
+        app_project_output_dir = (
+            site_dir
+            / "argocd_projects"
+            / site
+            / request.tenant
+            / request.lifecycle
+        )
+
+        applications_output_dir = (
+            site_dir
+            / "argocd_programs"
+            / site
+            / request.tenant
+            / request.lifecycle
+        )
+
+        decision = run_checks(
+            request=request,
+            git_repo_path=ARGO_DIR_TARGET,
+        )
+
+        generate_argocd(
+            git=git_argo,
+            request=request,
+            decision=decision,
+            applications_output_dir=applications_output_dir,
+            app_project_output_dir=app_project_output_dir,
+            site=site,
+        )
+
+        results.append({
+            "site": site,
+            "output_directory": {
+                "applications": str(
+                    applications_output_dir
+                ),
+                "app_project": str(
+                    app_project_output_dir
+                ),
+            },
+            "decision": {
+                "create_app_project": (
+                    decision.create_app_project
+                ),
+                "create_application": (
+                    decision.create_application
+                ),
+                "create_application_set": (
+                    decision.create_application_set
+                ),
+            },
+        })
 
     return {
         "status": "generated",
-
         "tenant": request.tenant,
-
         "lifecycle": request.lifecycle,
-
         "application": request.application,
-
-        "output_directory": (
-            applications_output_dir,app_project_output_dir
-        ),
-
-        "decision": {
-            "create_app_project": (
-                decision.create_app_project
-            ),
-            "create_application": (
-                decision.create_application
-            ),
-            "create_application_set": (
-                decision.create_application_set
-            ),
-        },
+        "sites": results,
     }
-
 
 
 
@@ -136,7 +151,7 @@ def provision_namespace(request: ProvisionRequest) -> None:
             request=request,
             namespace_output_dir=namespace_output_dir,
             namespace_output_dir_for_yahalom=namespace_yahalom_output_dir,
-            environment=environment,
+            cluster=environment,
         )
 
 
