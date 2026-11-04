@@ -2,8 +2,9 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 
-
-
+GIT_REPO_FOR_INFRA_OBJECTS = (
+    "https://github.com/bezalelshteren/argocd-registry.git"
+)
 GIT_REPO_FOR_ARGOCD_OBJECTS = (
     "https://github.com/bezalelshteren/argocd-registry.git"
 )
@@ -12,9 +13,9 @@ GIT_REPO_FOR_NAMESPACES_OBJECTS = (
     "https://github.com/bezalelshteren/cluster-registry.git"
 )
 
-GIT_REPO_FOR_MONITORING_EXPORT = (
-    "https://github.com/bezalelshteren/monitoring_exporter.git"
-)
+# GIT_REPO_FOR_MONITORING_EXPORT = (
+#     "https://github.com/bezalelshteren/monitoring_exporter.git"
+# )
 
 GIT_REPO_FOR_MONITORING_INGEST = (
     "https://github.com/bezalelshteren/monitoring-registry.git"
@@ -54,7 +55,7 @@ MONITORING_DIR_TARGET_INGEST = (
     BASE_DIR / "git-repos" / "monitoring-registry"
 )
 MONITORING_DIR_TARGET_EXPORT = (
-    BASE_DIR / "git-repos" / "monitoring-exporter"
+    BASE_DIR / "git-repos"
 )
 
 NAMESPACE_REPOSITORIES = {

@@ -6,33 +6,38 @@ metadata:
   labels:
     blackops/managed: "true"
     blackops/monitored: "true"
-    blackops/tenant: {{ request.tenant }}
+    blackops/tenant: {{ names.tenant }}
     blackops/part-of: "argocd"
+
 spec:
   syncPolicy:
     preserveResourcesOnDeletion: true
+
   generators:
     - git:
-        repoURL: {{ request.git.repo_url }}
-        revision: {{ request.git.target_revision }}
+        repoURL: {{ site.argocd.git_repo_url  }}
+        revision: master
         directories:
-          - path: {{ names.lifecycle }} /*
+          - path: '{{ names.lifecycle }}/*'
+
   template:
     metadata:
-      name: {{ path.basename }}
+      name: '{{"{{"}}path.basename{{"}}"}}'
       labels:
         blackops/managed: "true"
         blackops/monitored: "true"
-        blackops/tenant: {{ request.tenant }}
-        blackops/part-of: {{ path.basename }}
+        blackops/tenant: {{ names.tenant  }}
+        blackops/part-of: '{{"{{"}}path.basename{{"}}"}}'
+
     spec:
       project: {{ names.tenant }}-{{ names.lifecycle }}
       source:
-        repoURL: {{ request.git.repo_url }}
-        targetRevision: {{ request.git.target_revision }}
+        repoURL: {{ site.argocd.git_repo_url }}
+        targetRevision: master
         path: '{{"{{"}}path{{"}}"}}'
         directory:
           recurse: true
+
       destination:
-        name: {{ request.cluster }}
-        namespace: '{{"{{"}}namespace{{"}}"}}'-*
+        name: {{ cluster  }}
+        namespace: '{{"{{"}}namespace{{"}}"}}-*'

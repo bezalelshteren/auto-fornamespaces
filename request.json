@@ -1,32 +1,77 @@
 {
-  "cluster": "dev1",
-  "tenant": "rtemis",
-  "team": "rtemis",
-  "application": "buntis",
-  "lifecycle": "dev",
-  "ldap_group": "me",
-  "target_sites": [
-    "dev1"
-  ],
-  "git": {
-    "repo_url": "https://github.com/example/test-argocd-config.git",
-    "target_revision": "master",
-    "path": "dev/cds"
-  },
-  "namespace_config": {
-    "enabled": true,
-    "customer_yahalom": false
-  },
-  "argocd": {
-    "enabled": true,
-    "application": true,
-    "application_set": false
-  },
-  "monitoring": {
-    "enabled": true,
-    "ip": "127.0.0.1",
-    "ip_pmm": "127.00.0.2",
-    "ecs_id": "vfsdddddddddd",
-    "ecs_token": "dssssssssssssssv"
-  }
+  "tenant": "customer-test",
+  "team": "platform",
+  "application": "orders_service",
+  "customer_yahalom": false,
+  "sites": [
+    {
+      "name": "dev1",
+      "namespace": {
+        "enabled": true,
+        "customer_yahalom": false,
+        "lifecycle": "dev",
+        "ldap_group": "me"
+      },
+      "argocd": {
+        "enabled": true,
+        "type": "application",
+        "git_repo_url": "url"
+      },
+      "monitoring": {
+        "enabled": true,
+        "ingest": true,
+        "export": true,
+        "ecs_id": "vfsdddddddddd",
+        "ecs_token": "dssssssssssssssv",
+        "ip": "",
+        "ip_pmm": ""
+      }
+    },
+    {
+      "name": "prd1",
+      "namespace": {
+        "enabled": true,
+        "customer_yahalom": true,
+        "lifecycle": "prd",
+        "ldap_group": "me"
+      },
+      "argocd": {
+        "enabled": true,
+        "type": "application_set",
+        "git_repo_url": "url"
+      },
+      "monitoring": {
+        "enabled": false,
+        "ingest": false,
+        "export": false,
+        "ecs_id": "vfsdddddddddd",
+        "ecs_token": "dssssssssssssssv",
+        "ip": "",
+        "ip_pmm": ""
+      }
+    },
+    {
+      "name": "dr1",
+      "namespace": {
+        "enabled": true,
+        "customer_yahalom": false,
+        "lifecycle": "dr",
+        "ldap_group": "me"
+      },
+      "argocd": {
+        "enabled": false,
+        "type": null,
+        "git_repo_url": "url"
+      },
+      "monitoring": {
+        "enabled": true,
+        "ingest": true,
+        "export": false,
+        "ecs_id": "vfsdddddddddd",
+        "ecs_token": "dssssssssssssssv",
+        "ip": "1.1.1.1",
+        "ip_pmm": ""
+      }
+    }
+  ]
 }

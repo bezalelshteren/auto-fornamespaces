@@ -3,21 +3,26 @@ kind: AppProject
 metadata:
   name: {{ names.tenant }}-{{ names.lifecycle }}
   namespace: blackops-argocd-tenants
+
 spec:
   clusterResourceWhitelist:
     - group: "*"
       kind: "*"
+
   namespaceResourceBlacklist:
     - group: "*"
       kind: ResourceQuota
+
   roles:
-    - groups:
-      - group: {{ request.ldap_group }}
-        name: admin
-        policies:
-          - p, proj:{{ names.tenant }}-{{ names.lifecycle }}:admin, applications, *, {{ names.tenant }}-{{ names.lifecycle }}/*, allow
+    - name: admin
+      groups:
+        - {{ site.namespace.ldap_group }}
+      policies:
+        - p, proj:{{ names.tenant }}-{{ names.lifecycle }}:admin, applications, *, {{ names.tenant }}-{{ names.lifecycle }}/*, allow
+
   destinations:
     - namespace: {{ names.tenant }}-*
-      name: {{ request.cluster }}
+      name: {{ cluster }}
+
   sourceRepos:
-    - {{ request.git.repo_url }}
+    - {{ site.argocd.git_repo_url }}
