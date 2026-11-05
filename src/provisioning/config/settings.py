@@ -3,15 +3,15 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parents[3]
 
 GIT_REPO_FOR_INFRA_OBJECTS = (
-    "https://github.com/bezalelshteren/argocd-registry.git"
+    "https://github.com/bezalelshteren/infra1"
 )
 GIT_REPO_FOR_ARGOCD_OBJECTS = (
     "https://github.com/bezalelshteren/argocd-registry.git"
 )
 
-GIT_REPO_FOR_NAMESPACES_OBJECTS = (
-    "https://github.com/bezalelshteren/cluster-registry.git"
-)
+# GIT_REPO_FOR_NAMESPACES_OBJECTS = (
+#     "https://github.com/bezalelshteren/cluster-registry.git"
+# )
 
 # GIT_REPO_FOR_MONITORING_EXPORT = (
 #     "https://github.com/bezalelshteren/monitoring_exporter.git"
