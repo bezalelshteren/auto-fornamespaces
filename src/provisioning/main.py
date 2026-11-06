@@ -7,6 +7,7 @@ from .services.provision import (
     provision_namespace,
     provision_monitoring_export,
     provision_monitoring_ingest,
+    provision_argocd_infra,
 )
 
 app = FastAPI(
@@ -111,6 +112,12 @@ def create_provision(request: ProvisionRequest):
 
             results.append(site_result)
 
+        infra_result = provision_argocd_infra(request)
+
+        results.append({
+            "component": "argocd_infrastructure",
+            "result": infra_result,
+        })
 
     except Exception as exc:
 

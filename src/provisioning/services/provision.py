@@ -7,6 +7,8 @@ from ..config.settings import (
     GIT_REPO_FOR_MONITORING_INGEST,
     MONITORING_DIR_TARGET_INGEST,
 )
+from ..generators.argocd_objects.argocd_infra_object import generate_argocd_infra
+
 
 from ..generators.argocd_objects.argocd import generate_argocd
 from ..models.provision_request import ProvisionRequest, SiteConfig
@@ -263,3 +265,18 @@ def provision_monitoring_export(
         "status": "generated",
         "output_directory": str(monitoring_output_dir),
     }
+
+
+
+def provision_argocd_infra(request: ProvisionRequest) -> dict:
+    """
+    Provision shared ArgoCD infrastructure objects for all sites.
+    Independent of site.argocd.enabled.
+    """
+    print(
+        f"[provision_argocd_infra] "
+        f"tenant={request.tenant}, "
+        f"application={request.application}"
+    )
+
+    return generate_argocd_infra(request)
