@@ -2,19 +2,21 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[3]
 
-
-
+ARGOCD_INFRA_REPOSITORY = {
+    "git_repo": "https://github.com/bezalelshteren/infra1",
+    "local_path": Path("infra1"),
+}
 GIT_REPO_FOR_ARGOCD_OBJECTS = (
     "https://github.com/bezalelshteren/argocd-registry.git"
 )
 
-GIT_REPO_FOR_NAMESPACES_OBJECTS = (
-    "https://github.com/bezalelshteren/cluster-registry.git"
-)
+# GIT_REPO_FOR_NAMESPACES_OBJECTS = (
+#     "https://github.com/bezalelshteren/cluster-registry.git"
+# )
 
-GIT_REPO_FOR_MONITORING_EXPORT = (
-    "https://github.com/bezalelshteren/monitoring_exporter.git"
-)
+# GIT_REPO_FOR_MONITORING_EXPORT = (
+#     "https://github.com/bezalelshteren/monitoring_exporter.git"
+# )
 
 GIT_REPO_FOR_MONITORING_INGEST = (
     "https://github.com/bezalelshteren/monitoring-registry.git"
@@ -34,7 +36,7 @@ TEMPLATES_DIR = (
 )
 
 ARGOCD_TEMPLATES_DIR = (
-        TEMPLATES_DIR / "argocd_objects"
+        TEMPLATES_DIR / "argocd-objects"
 )
 NAMESPACE_TEMPLATES_DIR = (
     TEMPLATES_DIR / "namespace-objects"
@@ -54,7 +56,7 @@ MONITORING_DIR_TARGET_INGEST = (
     BASE_DIR / "git-repos" / "monitoring-registry"
 )
 MONITORING_DIR_TARGET_EXPORT = (
-    BASE_DIR / "git-repos" / "monitoring-exporter"
+    BASE_DIR / "git-repos"
 )
 
 NAMESPACE_REPOSITORIES = {
@@ -69,4 +71,32 @@ NAMESPACE_REPOSITORIES = {
         "git_repo": "https://github.com/company/namespaces-stg.git",
         "local_path": Path( BASE_DIR / "git-repos" / "cluster-registry" / "namespaces-stg"),
     },
+}
+
+
+ARGOCD_INFRA_REPOSITORIES = {
+    "dev1": {
+        "git_repo": "https://github.com/bezalelshteren/cluster-registry.git",
+        "local_path": Path("cluster-registry"),
+    },
+
+    "stg1": {
+        "git_repo": "https://github.com/company/namespaces-stg.git",
+        "local_path": Path("stg1"),
+    },
+
+    "prd1": {
+        "git_repo": "https://github.com/bezalelshteren/prd1.git",
+        "local_path": Path("prd1"),
+    },
+
+    "monitoring1": {
+        "git_repo": "https://github.com/bezalelshteren/monitoring-registry.git",
+        "local_path": Path("monitoring-registry"),
+    },
+}
+
+ENVIRONMENT_DIRECTORIES = {
+    "project": "argocd-project",
+    "programs": "argocd-programs",
 }

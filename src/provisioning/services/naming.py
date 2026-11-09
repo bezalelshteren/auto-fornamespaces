@@ -1,23 +1,25 @@
-from ..models.provision_request import ProvisionRequest
+from ..models.provision_request import ProvisionRequest, SiteConfig
 
 
-def build_names(request: ProvisionRequest) -> dict[str, str]:
+def build_names(request: ProvisionRequest, site: SiteConfig) -> dict[str, str]:
     tenant = request.tenant
-    lifecycle = request.lifecycle
+    lifecycle = site.namespace.lifecycle
     application = request.application
-    cluster = request.cluster
+    cluster = site.name
 
     return {
         "tenant": tenant,
         "lifecycle": lifecycle,
+        "cluster": cluster,
         "chart_monitoring": "monitoring-stack-ingest",
         "chart_monitoring_ingest_version": "1.0.0",
         "chart_namespace": "namespace-stack",
-        "chart_namespace_version" : "1.0.0",
+        "chart_namespace_version": "1.0.0",
         "chart_namespace_yahalom": "namespace-stack-yahalom",
-        "chart_namespace_yahalom_version" : "1.0.0",
+        "chart_namespace_yahalom_version": "1.0.0",
         "namespace": f"{tenant}-{lifecycle}-{application}",
         "project_name": f"{tenant}-{lifecycle}",
         "application_name": f"{tenant}-{lifecycle}-{application}",
         "application_set_name": f"{tenant}-{lifecycle}-applications",
     }
+

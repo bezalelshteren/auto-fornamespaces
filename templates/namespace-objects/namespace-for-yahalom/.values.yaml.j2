@@ -2,3 +2,29 @@ namespace:
   name: {{ namespace.name }}
   ldap-group: {{ namespace.ldap_group }}
   scc: {{ namespace.scc }}
+  {% if namespace.compute is defined %}
+  compute:
+{% if namespace.compute.cpu is defined and namespace.compute.cpu %}
+    cpu:
+{% if namespace.compute.cpu.request is not none %}
+      request: {{ namespace.compute.cpu.request | tojson }}
+{% endif %}
+{% if namespace.compute.cpu.limit is not none %}
+      limit: {{ namespace.compute.cpu.limit | tojson }}
+{% endif %}
+{% endif %}
+{% if namespace.compute.memory is defined and namespace.compute.memory %}
+    memory:
+{% if namespace.compute.memory.request is not none %}
+      request: {{ namespace.compute.memory.request | tojson }}
+{% endif %}
+{% if namespace.compute.memory.limit is not none %}
+      limit: {{ namespace.compute.memory.limit | tojson }}
+{% endif %}
+{% endif %}
+{% if namespace.compute.storage is defined and namespace.compute.storage %}
+    storage:
+      size: {{ namespace.compute.storage.size | tojson }}
+      storage-class: {{ namespace.compute.storage.storage_class | tojson }}
+{% endif %}
+{% endif %}

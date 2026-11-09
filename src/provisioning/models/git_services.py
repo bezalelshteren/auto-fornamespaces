@@ -258,7 +258,8 @@ class GitActions:
             _git_missing("checkout_branch", e)
             return False
 
-    def git_add_commit_push(self, commit_message: str) -> bool:
+
+    def git_add_commit_push(self, commit_message: str) -> str | None:
         """
         Stages all changes, commits them, and pushes the current branch.
         Returns True only if something was actually pushed.
@@ -267,7 +268,7 @@ class GitActions:
         print(f"[git_add_commit_push] commit_message={commit_message!r}")
 
         if not self.directory_exists():
-            return False
+            return None
 
         repo = self.git_repo_to_do_actions
 
@@ -279,48 +280,48 @@ class GitActions:
                 "[git_add_commit_push] FAILED: could not determine the current "
                 "branch (repo without commits, or detached HEAD). Nothing was pushed."
             )
-            return False
+            return None
 
         if current_branch == "main" or current_branch == "master":
             print(f"[git_add_commit_push] Refusing to push directly to '{current_branch}'.")
-            return False
+            return None
 
         try:
             # git add .
             result = _run_git(["add", "."], cwd=repo, check=False)
             if result.returncode != 0:
                 _fail("git_add_commit_push", ["git", "add", "."], result.stderr, result.stdout)
-                return False
+                return None
 
             # Check whether there are changes to commit
             result = _run_git(["status", "--porcelain"], cwd=repo, check=False)
             if result.returncode != 0:
                 _fail("git_add_commit_push", ["git", "status", "--porcelain"], result.stderr, result.stdout)
-                return False
+                return None
 
             if not result.stdout.strip():
                 print(
                     "[git_add_commit_push] Nothing to commit (files are identical "
                     "to what the branch already has). Nothing was pushed."
                 )
-                return False
+                return None
 
             # git commit
             result = _run_git(["commit", "-m", commit_message], cwd=repo, check=False)
             if result.returncode != 0:
                 _fail("git_add_commit_push", ["git", "commit", "-m", commit_message], result.stderr, result.stdout)
-                return False
+                return None
 
             # git push
             push_args = ["push", "-u", "origin", current_branch]
             result = _run_git(push_args, cwd=repo, check=False)
             if result.returncode != 0:
                 _fail("git_add_commit_push", ["git", *push_args], result.stderr, result.stdout)
-                return False
+                return None
 
             print(f"[git_add_commit_push] OK: pushed branch '{current_branch}'.")
-            return True
+            return f"Changes committed and pushed to branch '{current_branch}'.in this repo: {repo}"
 
         except OSError as e:
             _git_missing("git_add_commit_push", e)
-            return False
+            return None

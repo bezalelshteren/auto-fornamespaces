@@ -12,13 +12,13 @@ spec:
       kind: ResourceQuota
   roles:
     - groups:
-      - group: {{ request.ldap_group }}
-        name: admin
-        policies:
-          - p, proj:{{ names.tenant }}-{{ names.lifecycle }}:admin, applications, *, {{ names.tenant }}-{{ names.lifecycle }}/*, allow
-          - p, proj:{{ names.tenant }}-{{ names.lifecycle }}:admin, exec , create, get, {{names.tenant }}-{{ names.lifecycle }}/*, allow
+        - group: {{ request.ldap_group }}
+      name: admin
+      policies:
+        - p, proj:{{ names.tenant }}-{{ names.lifecycle }}:admin, applications, *, {{ names.tenant }}-{{ names.lifecycle }}/*, allow
+        - p, proj:{{ names.tenant }}-{{ names.lifecycle }}:admin, exec, create, get, {{ names.tenant }}-{{ names.lifecycle }}/*, allow
   destinations:
     - namespace: {{ names.tenant }}-*
       name: {{ request.cluster }}
   sourceRepos:
-    - {{ request.git.repo_url }}
+    - {{ site.argocd.git_repo_url }}

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "provisioning.fullname" . }}
+  labels:
+    {{- include "provisioning.labels" . | nindent 4 }}
+data:
+  PYTHONPATH: {{ .Values.config.pythonPath | quote }}
+  GIT_NAMESPACE_REPO: {{ .Values.config.git.namespaceRepo | quote }}
+  GIT_MONITORING_REPO: {{ .Values.config.git.monitoringRepo | quote }}
+  GIT_ARGOCD_REPO: {{ .Values.config.git.argocdRepo | quote }}
+  GIT_ACTIONS_BASE_PATH: {{ .Values.config.gitActions.basePath | quote }}
+  LOG_LEVEL: {{ .Values.config.provisioning.logLevel | quote }}

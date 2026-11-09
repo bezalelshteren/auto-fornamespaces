@@ -1,0 +1,43 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: {{ names.cluster }}-{{ names.tenant }}-{{ names.application }}
+  namespace: blackops-argocd-tenants
+  labels:
+    blackops/managed: "true"
+    blackops/monitored: "true"
+    blackops/tenant: {{ names.tenant }}
+    blackops/part-of: "argocd"
+
+spec:
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+
+  generators:
+    - git:
+        repoURL: {{ site.argocd.git_repo_url  }}
+        revision: master
+        directories:
+          - path: '{{ names.lifecycle }}/*'
+
+  template:
+    metadata:
+      name: '{{"{{"}}path.basename{{"}}"}}'
+      labels:
+        blackops/managed: "true"
+        blackops/monitored: "true"
+        blackops/tenant: {{ names.tenant  }}
+        blackops/part-of: '{{"{{"}}path.basename{{"}}"}}'
+
+    spec:
+      project: {{ names.tenant }}-{{ names.lifecycle }}
+      source:
+        repoURL:   {{ source_repo }}
+        targetRevision: master
+        path: '{{"{{"}}path{{"}}"}}'
+        directory:
+          recurse: true
+
+      destination:
+        name: {{ cluster  }}
+        namespace: '{{"{{"}}namespace{{"}}"}}-*'
