@@ -1,76 +1,65 @@
 {
-  "tenant": "customer-test",
+  "tenant": "customer-test78887",
   "team": "platform",
-  "application": "orders_service",
+  "application": "orders-ser72vicecdmcz11213",
+  "ldap_group": "platform-dev",
   "customer_yahalom": false,
+  "scc": null,
+  "custom": true,
+  "compute": {
+    "cpu": {
+      "request": "500m",
+      "limit": "2"
+    },
+    "memory": {
+      "request": "512Mi",
+      "limit": "2Gi"
+    },
+    "storage": {
+      "size": "10Gi",
+      "storage_class": "fast-ssd"
+    }
+  },
   "sites": [
     {
       "name": "dev1",
       "namespace": {
         "enabled": true,
-        "customer_yahalom": false,
-        "lifecycle": "dev",
-        "ldap_group": "me"
+        "lifecycle": "dev"
       },
       "argocd": {
         "enabled": true,
         "type": "application",
-        "git_repo_url": "url"
+        "git_repo_url": "https://github.com/customer-test/orders-service.git"
+      },
+      "monitoring": {
+        "enabled": true,
+        "ingest": true,
+        "export": false,
+        "ecs_id": "ecs-customer-test-001",
+        "ecs_token": "example-ecs-token",
+        "ip": "10.10.10.100",
+        "webhook_url": "dsssssssssssssf"
+      }
+    },{
+      "name": "prd1",
+      "namespace": {
+        "enabled": true,
+        "lifecycle": "prd"
+      },
+      "argocd": {
+        "enabled": true,
+        "type": "application",
+        "git_repo_url": "https://github.com/customer-test/orders-service.git"
       },
       "monitoring": {
         "enabled": true,
         "ingest": true,
         "export": true,
-        "ecs_id": "vfsdddddddddd",
-        "ecs_token": "dssssssssssssssv",
-        "ip": "",
-        "ip_pmm": ""
-      }
-    },
-    {
-      "name": "prd1",
-      "namespace": {
-        "enabled": true,
-        "customer_yahalom": true,
-        "lifecycle": "prd",
-        "ldap_group": "me"
-      },
-      "argocd": {
-        "enabled": true,
-        "type": "application_set",
-        "git_repo_url": "url"
-      },
-      "monitoring": {
-        "enabled": false,
-        "ingest": false,
-        "export": false,
-        "ecs_id": "vfsdddddddddd",
-        "ecs_token": "dssssssssssssssv",
-        "ip": "",
-        "ip_pmm": ""
-      }
-    },
-    {
-      "name": "dr1",
-      "namespace": {
-        "enabled": true,
-        "customer_yahalom": false,
-        "lifecycle": "dr",
-        "ldap_group": "me"
-      },
-      "argocd": {
-        "enabled": false,
-        "type": null,
-        "git_repo_url": "url"
-      },
-      "monitoring": {
-        "enabled": true,
-        "ingest": true,
-        "export": false,
-        "ecs_id": "vfsdddddddddd",
-        "ecs_token": "dssssssssssssssv",
-        "ip": "1.1.1.1",
-        "ip_pmm": ""
+        "ecs_id": "ecs-customer-test-003",
+        "ecs_token": "example-ecs-token",
+        "ip": "10.30.10.100",
+        "webhook_url": "dsssssssssssssf"
       }
     }
   ]
