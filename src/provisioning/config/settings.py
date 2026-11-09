@@ -95,3 +95,8 @@ ARGOCD_INFRA_REPOSITORIES = {
         "local_path": Path("monitoring-registry"),
     },
 }
+
+ENVIRONMENT_DIRECTORIES = {
+    "project": "argocd-project",
+    "programs": "argocd-programs",
+}

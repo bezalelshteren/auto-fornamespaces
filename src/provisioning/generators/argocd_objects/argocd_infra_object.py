@@ -1,32 +1,69 @@
 from pathlib import Path
-import re
 import logging
 
 from jinja2 import Environment, FileSystemLoader
 
 from ...config.settings import (
     ARGOCD_INFRA_REPOSITORY,
+    ARGOCD_INFRA_REPOSITORIES,
     ARGOCD_TEMPLATES_DIR,
     BASE_DIR,
 )
 from ...models.git_services import GitActions
 from ...models.provision_request import ProvisionRequest
 
+
 logger = logging.getLogger("provisioning")
 
+INFRA_REPOSITORY_NAME = "infra1"
 
-LIFECYCLE_ENV = {
-    "dev": "dev1",
-    "stg": "stg1",
-    "prd": "prd1",
+INFRA_REPOSITORY_ROOT = "blackops"
+INFRA_TENANTS_ROOT = "argocd-tenants"
+
+INFRA_DEFAULT_BRANCH = "master"
+
+
+
+ENVIRONMENT_DIRECTORIES = {
+    "project": "argocd-project",
+    "programs": "argocd-programs",
 }
+
+
+def _get_environment_git_repo(environment: str) -> str:
+    """Return the Git repository URL configured for an environment."""
+    config = ARGOCD_INFRA_REPOSITORIES.get(environment)
+
+    if not config:
+        raise ValueError(
+            f"Missing Git repository configuration for environment: {environment}"
+        )
+
+    git_repo = config.get("git_repo")
+
+    if not git_repo:
+        raise ValueError(
+            f"Missing git_repo URL for environment: {environment}"
+        )
+
+    logger.info(
+        "[argocd_infra] Source repository | environment=%s | git_repo=%s",
+        environment,
+        git_repo,
+    )
+
+    return git_repo
+
+
+# ============================================================
+# Jinja templates
+# ============================================================
 
 APP_PROJECT_TEMPLATES = {
     "namespace": "app-project-infra-namespace.yaml.j2",
     "monitoring": "app-project-infra-monitoring.yaml.j2",
 }
 
-APPLICATION_TEMPLATE = "application.yaml.j2"
 
 APPLICATION_SET_TEMPLATES = {
     "namespace": "application-infra-namespace.yaml.j2",
@@ -34,7 +71,15 @@ APPLICATION_SET_TEMPLATES = {
 }
 
 
+
 def generate_argocd_infra(request: ProvisionRequest) -> dict:
+    """
+    Generate ArgoCD infrastructure objects in one Git repository.
+
+    All environments are generated in one checkout,
+    one feature branch and one Git push.
+    """
+
     logger.info(
         "[argocd_infra] START | tenant=%s | application=%s | sites=%s",
         request.tenant,
@@ -42,163 +87,126 @@ def generate_argocd_infra(request: ProvisionRequest) -> dict:
         len(request.sites),
     )
 
-    jobs = {}
-
     try:
-        # Collect all required ArgoCD infrastructure objects.
-        # The key is the destination site inside the single infra repository.
-        for site in request.sites:
-            lifecycle = str(site.namespace.lifecycle or "").lower()
+        # ----------------------------------------------------
+        # 1. Collect generation jobs
+        # ----------------------------------------------------
 
-            logger.info(
-                "[argocd_infra] Site=%s | lifecycle=%s | namespace=%s | "
-                "monitoring=%s | ingest=%s | export=%s",
-                site.name,
-                lifecycle,
-                site.namespace.enabled,
-                site.monitoring.enabled,
-                site.monitoring.ingest,
-                site.monitoring.export,
-            )
+        jobs = _collect_jobs(request)
 
-            if site.namespace.enabled:
-                if lifecycle not in LIFECYCLE_ENV:
-                    raise ValueError(f"Invalid lifecycle: {lifecycle}")
+        if not jobs:
+            logger.info("[argocd_infra] No enabled jobs found.")
 
-                environment = LIFECYCLE_ENV[lifecycle]
-                jobs.setdefault(environment, []).append(
-                    (site, "namespace", lifecycle)
-                )
-
-                logger.info(
-                    "[argocd_infra] Namespace job added | site=%s | env=%s",
-                    site.name,
-                    environment,
-                )
-
-            if site.monitoring.enabled and (
-                site.monitoring.ingest or site.monitoring.export
-            ):
-                if lifecycle not in LIFECYCLE_ENV:
-                    raise ValueError(
-                        f"Invalid lifecycle for monitoring: {lifecycle}"
-                    )
-
-                jobs.setdefault("monitoring1", []).append(
-                    (site, "monitoring", lifecycle)
-                )
-
-                logger.info(
-                    "[argocd_infra] Monitoring job added | site=%s | env=monitoring1",
-                    site.name,
-                )
+            return {
+                "status": "unchanged",
+                "tenant": request.tenant,
+                "application": request.application,
+                "repository": INFRA_REPOSITORY_NAME,
+                "sites": [],
+            }
 
         logger.info(
             "[argocd_infra] Jobs collected: %s",
             {
-                env: [
+                environment: [
                     (site.name, component, lifecycle)
-                    for site, component, lifecycle in env_jobs
+                    for site, component, lifecycle in environment_jobs
                 ]
-                for env, env_jobs in jobs.items()
+                for environment, environment_jobs in jobs.items()
             },
         )
 
-        results = []
+        # ----------------------------------------------------
+        # 2. Load repository configuration
+        # ----------------------------------------------------
 
-        # Each environment is written to its own directory, but all directories
-        # are committed to the same infra Git repository.
-        for environment, environment_jobs in jobs.items():
-            logger.info(
-                "[argocd_infra] Processing site=%s | jobs=%s | repository=infra",
-                environment,
-                len(environment_jobs),
-            )
-
-            result = _process_environment(
-                request,
-                environment,
-                environment_jobs,
-            )
-
-            results.append(result)
-
-            logger.info(
-                "[argocd_infra] Site result: %s",
-                result,
-            )
-
-        logger.info(
-            "[argocd_infra] SUCCESS | tenant=%s | application=%s",
-            request.tenant,
-            request.application,
-        )
-
-        return {
-            "status": "success",
-            "tenant": request.tenant,
-            "application": request.application,
-            "repository": "infra",
-            "sites": results,
-        }
-
-    except Exception:
-        logger.exception(
-            "[argocd_infra] FAILED | tenant=%s | application=%s",
-            request.tenant,
-            request.application,
-        )
-        raise
-
-
-def _process_environment(request, environment, jobs):
-    logger.info(
-        "[argocd_infra] START site=%s | repository=infra",
-        environment,
-    )
-
-    stage = "load_repository_config"
-    try:
         config = ARGOCD_INFRA_REPOSITORY
 
-        logger.info(
-            "[argocd_infra] Infra repository config | config=%s",
-            {
-                "local_path": config.get("local_path") if config else None,
-                "git_repo_configured": bool(config and config.get("git_repo")),
-            },
-        )
-
         if not config or not config.get("git_repo"):
-            raise ValueError("Missing Git repository configuration for infra")
+            raise ValueError(
+                "Missing Git repository configuration for infra1"
+            )
 
-        stage = "resolve_repository_path"
-        repo_path = Path(config["local_path"])
+        repo_path = Path(
+            config.get("local_path") or INFRA_REPOSITORY_NAME
+        )
 
         if not repo_path.is_absolute():
             repo_path = BASE_DIR / "git-repos" / repo_path
 
+        repo_path = repo_path.resolve()
+
         logger.info(
-            "[argocd_infra] Infra repository path=%s",
+            "[argocd_infra] Repository configuration | remote=%s | "
+            "local_path=%s | default_branch=%s",
+            config["git_repo"],
+            repo_path,
+            INFRA_DEFAULT_BRANCH,
+        )
+
+        # ----------------------------------------------------
+        # 3. Clone/update repository ONCE
+        # ----------------------------------------------------
+
+        git = GitActions(config["git_repo"], repo_path)
+
+        logger.info(
+            "[argocd_infra] Git clone/update started | path=%s",
             repo_path,
         )
 
-        stage = "initialize_git_actions"
-        git = GitActions(config["git_repo"], repo_path)
+        if not git.clone_or_update(
+            target_revision=INFRA_DEFAULT_BRANCH
+        ):
+            raise RuntimeError(
+                f"Git clone/update failed: {INFRA_REPOSITORY_NAME}"
+            )
 
-        logger.info("[argocd_infra] Git clone/update started | repository=infra | path=%s", repo_path)
-        stage = "git_clone_or_update"
-
-        if not git.clone_or_update(target_revision="master"):
-            raise RuntimeError("Git clone/update failed: infra")
-
-        logger.info("[argocd_infra] Git clone/update completed | repository=infra")
-
-        stage = "validate_git_directory"
         if not git.directory_exists():
-            raise RuntimeError(f"Invalid Git repository: {repo_path}")
+            raise RuntimeError(
+                f"Invalid Git repository directory: {repo_path}"
+            )
 
-        stage = "initialize_jinja"
+        logger.info(
+            "[argocd_infra] Repository ready | path=%s | branch=%s",
+            repo_path,
+            git.get_current_branch(),
+        )
+
+
+        # branch = _build_branch_name(request)
+        branch_name = "feat/argocd-infra/" + request.tenant
+        branch = git.checkout_branch(branch_name)
+
+        logger.info(
+            "[argocd_infra] Checking out feature branch=%s",
+            branch,
+        )
+
+        # if not git.checkout_branch(branch):
+        #     raise RuntimeError(
+        #         f"Cannot checkout feature branch: {branch}"
+        #     )
+
+        current_branch = git.get_current_branch()
+
+        logger.info(
+            "[argocd_infra] Current branch=%s",
+            current_branch,
+        )
+
+        if current_branch in {
+            INFRA_DEFAULT_BRANCH,
+            "master",
+            None,
+            "HEAD",
+        }:
+            raise RuntimeError(
+                f"Refusing to generate/push on protected branch: "
+                f"{current_branch}"
+            )
+
+
         jinja = Environment(
             loader=FileSystemLoader(str(ARGOCD_TEMPLATES_DIR)),
             autoescape=False,
@@ -210,30 +218,251 @@ def _process_environment(request, environment, jobs):
             ARGOCD_TEMPLATES_DIR,
         )
 
-        planned = []
-        existing = []
-        handled_projects = set()
+        # ----------------------------------------------------
+        # 6. Plan all objects for all environments
+        # ----------------------------------------------------
 
-        from ...services.naming import build_names
+        planned, existing = _plan_objects(
+            request=request,
+            jobs=jobs,
+            repo_path=repo_path,
+        )
 
-        for site, component, lifecycle in jobs:
-            stage = f"build_objects:{site.name}:{component}:{lifecycle}"
+        logger.info(
+            "[argocd_infra] Planning completed | planned=%s | existing=%s",
+            len(planned),
+            len(existing),
+        )
+
+        if not planned:
             logger.info(
-                "[argocd_infra] Building objects | destination_site=%s | source_site=%s | component=%s | lifecycle=%s",
+                "[argocd_infra] Nothing new to generate."
+            )
+
+            return {
+                "status": "unchanged",
+                "tenant": request.tenant,
+                "application": request.application,
+                "repository": INFRA_REPOSITORY_NAME,
+                "repository_path": str(repo_path),
+                "branch": current_branch,
+                "generated": [],
+                "already_exists": existing,
+            }
+
+        # ----------------------------------------------------
+        # 7. Render and write all files
+        # ----------------------------------------------------
+
+        generated = _render_and_write(
+            planned=planned,
+            jinja=jinja,
+        )
+
+        if not generated:
+            logger.info(
+                "[argocd_infra] No new files generated."
+            )
+
+            return {
+                "status": "unchanged",
+                "tenant": request.tenant,
+                "application": request.application,
+                "repository": INFRA_REPOSITORY_NAME,
+                "repository_path": str(repo_path),
+                "branch": current_branch,
+                "generated": [],
+                "already_exists": existing,
+            }
+
+        # ----------------------------------------------------
+        # 8. Git commit and push ONCE
+        # ----------------------------------------------------
+
+        commit_message = (
+            f"feat: add ArgoCD infra objects for "
+            f"{request.tenant}/{request.application}"
+        )
+
+        logger.info(
+            "[argocd_infra] Git commit/push started | "
+            "branch=%s | files=%s | message=%s",
+            branch,
+            len(generated),
+            commit_message,
+        )
+
+        if not git.git_add_commit_push(
+            commit_message=commit_message
+        ):
+            raise RuntimeError(
+                "Git add/commit/push failed for infra1"
+            )
+
+        logger.info(
+            "[argocd_infra] SUCCESS | repository=%s | "
+            "path=%s | branch=%s | generated=%s",
+            INFRA_REPOSITORY_NAME,
+            repo_path,
+            branch,
+            generated,
+        )
+
+        return {
+            "status": "pushed",
+            "tenant": request.tenant,
+            "application": request.application,
+            "repository": INFRA_REPOSITORY_NAME,
+            "repository_path": str(repo_path),
+            "branch": branch,
+            "generated": generated,
+            "already_exists": existing,
+        }
+
+    except Exception:
+        logger.exception(
+            "[argocd_infra] FAILED | tenant=%s | application=%s",
+            request.tenant,
+            request.application,
+        )
+        raise
+
+
+# ============================================================
+# Collect jobs
+# ============================================================
+
+def _collect_jobs(request: ProvisionRequest) -> dict:
+    """
+    Collect all required jobs.
+
+    Namespace:
+        The target cluster is taken directly from site.name.
+        Lifecycle is metadata and does not determine the cluster.
+
+    Monitoring:
+        All monitoring objects -> monitoring1
+    """
+
+    jobs = {}
+
+    for site in request.sites:
+
+        lifecycle = str(
+            site.namespace.lifecycle or ""
+        ).lower()
+
+        logger.info(
+            "[argocd_infra] Site=%s | lifecycle=%s | "
+            "namespace_enabled=%s | monitoring_enabled=%s | "
+            "ingest=%s | export=%s",
+            site.name,
+            lifecycle,
+            site.namespace.enabled,
+            site.monitoring.enabled,
+            site.monitoring.ingest,
+            site.monitoring.export,
+        )
+
+        if not lifecycle:
+            raise ValueError(
+                f"Missing lifecycle for site: {site.name}"
+            )
+
+        # ----------------------------------------------------
+        # Namespace
+        # ----------------------------------------------------
+
+        if site.namespace.enabled:
+
+            # The cluster name is the environment/repository key.
+            # Do not infer the cluster from lifecycle: multiple clusters
+            # may use the same lifecycle (for example, MOBILE + dev).
+            environment = site.name
+
+            jobs.setdefault(environment, []).append(
+                (site, "namespace", lifecycle)
+            )
+
+            logger.info(
+                "[argocd_infra] Namespace job added | "
+                "site=%s | environment=%s",
+                site.name,
+                environment,
+            )
+
+        # ----------------------------------------------------
+        # Monitoring
+        # ----------------------------------------------------
+
+        if site.monitoring.enabled and (
+            site.monitoring.ingest
+            or site.monitoring.export
+        ):
+
+            jobs.setdefault("monitoring1", []).append(
+                (site, "monitoring", lifecycle)
+            )
+
+            logger.info(
+                "[argocd_infra] Monitoring job added | "
+                "site=%s | environment=monitoring1",
+                site.name,
+            )
+
+    return jobs
+
+
+# ============================================================
+# Plan objects
+# ============================================================
+
+def _plan_objects(
+    request: ProvisionRequest,
+    jobs: dict,
+    repo_path: Path,
+) -> tuple[list, list]:
+
+    planned = []
+    existing = []
+
+    handled_projects = set()
+
+    from ...services.naming import build_names
+
+    for environment, environment_jobs in jobs.items():
+
+        # Directory names are shared by all environments. The Git source
+        # repository remains environment-specific.
+        directory_config = ENVIRONMENT_DIRECTORIES
+        source_repo = _get_environment_git_repo(environment)
+
+        environment_root = (
+            repo_path
+            / INFRA_REPOSITORY_ROOT
+            / INFRA_TENANTS_ROOT
+            / environment
+        )
+
+        logger.info(
+            "[argocd_infra] Environment destination | "
+            "environment=%s | root=%s",
+            environment,
+            environment_root,
+        )
+
+        for site, component, lifecycle in environment_jobs:
+
+            logger.info(
+                "[argocd_infra] Building objects | "
+                "environment=%s | site=%s | component=%s | lifecycle=%s",
                 environment,
                 site.name,
                 component,
                 lifecycle,
             )
 
-            logger.info("[argocd_infra] Calling build_names | source_site=%s", site.name)
             names = build_names(request, site)
-
-            logger.info(
-                "[argocd_infra] Names generated | site=%s | names=%s",
-                site.name,
-                names,
-            )
 
             context = {
                 "request": request,
@@ -248,250 +477,175 @@ def _process_environment(request, environment, jobs):
                 "application": request.application,
                 "namespace_name": names.get("namespace"),
                 "argo_environment": environment,
+                "source_repo": source_repo,
             }
 
-            # All objects are stored under the Black Ops tenant in the
-            # single infra repository, separated by destination site.
-            site_root = repo_path / "blackops" / environment
+            # ------------------------------------------------
+            # AppProject path
+            # ------------------------------------------------
 
             project_file = (
-                site_root / "argocd-objects"
-                / request.tenant / f"{lifecycle}.yaml"
+                environment_root
+                / directory_config["project"]
+                / request.tenant
+                / f"{lifecycle}.yaml"
             )
+
+            # ------------------------------------------------
+            # ApplicationSet paths
+            # ------------------------------------------------
 
             app_dir = (
-                site_root / "argocd-programs" / site.name
-                / request.tenant / lifecycle
+                environment_root
+                / directory_config["programs"]
+                / site.name
+                / request.tenant
             )
 
-            application_file = app_dir / f"{request.application}.yaml"
-            appset_file = app_dir / "applicationSet.yaml"
+            application_file = (
+                app_dir / f"{request.application}.yaml"
+            )
+
+            appset_file = (
+                app_dir / "applicationSet.yaml"
+            )
 
             logger.info(
-                "[argocd_infra] Target paths | project=%s | application=%s | appset=%s",
+                "[argocd_infra] Target paths | "
+                "project=%s | application=%s | appset=%s",
                 project_file,
                 application_file,
                 appset_file,
             )
 
-            # AppProject - once per lifecycle in this destination site.
-            project_key = (environment, lifecycle)
+            # ------------------------------------------------
+            # AppProject - once per environment/tenant/lifecycle
+            # ------------------------------------------------
+
+            project_key = (
+                environment,
+                request.tenant,
+                lifecycle,
+            )
+
             if project_key not in handled_projects:
-                if not project_file.exists():
-                    template = APP_PROJECT_TEMPLATES[component]
 
-                    logger.info(
-                        "[argocd_infra] AppProject missing | template=%s | path=%s",
-                        template,
-                        project_file,
-                    )
+                if project_file.exists():
 
-                    planned.append((
-                        template,
-                        project_file,
-                        context,
-                    ))
-                else:
-                    logger.info(
-                        "[argocd_infra] AppProject already exists: %s",
-                        project_file,
-                    )
                     existing.append(str(project_file))
+
+                    logger.info(
+                        "[argocd_infra] AppProject exists; skipping: %s",
+                        project_file,
+                    )
+
+                else:
+
+                    planned.append(
+                        (
+                            APP_PROJECT_TEMPLATES[component],
+                            project_file,
+                            context,
+                            environment,
+                        )
+                    )
 
                 handled_projects.add(project_key)
 
-            # Application
-            if not application_file.exists():
-                logger.info(
-                    "[argocd_infra] Application missing | template=%s | path=%s",
-                    APPLICATION_TEMPLATE,
-                    application_file,
-                )
-
-                planned.append((
-                    APPLICATION_TEMPLATE,
-                    application_file,
-                    context,
-                ))
-            else:
-                logger.info(
-                    "[argocd_infra] Application already exists: %s",
-                    application_file,
-                )
-                existing.append(str(application_file))
-
+            # ------------------------------------------------
             # ApplicationSet
-            if not appset_file.exists():
-                template = APPLICATION_SET_TEMPLATES[component]
+            # ------------------------------------------------
 
-                logger.info(
-                    "[argocd_infra] ApplicationSet missing | template=%s | path=%s",
-                    template,
-                    appset_file,
-                )
-
-                planned.append((
-                    template,
-                    appset_file,
-                    context,
-                ))
-            else:
-                logger.info(
-                    "[argocd_infra] ApplicationSet already exists: %s",
-                    appset_file,
-                )
+            if appset_file.exists():
 
                 existing.append(str(appset_file))
 
+                logger.info(
+                    "[argocd_infra] ApplicationSet exists; skipping: %s",
+                    appset_file,
+                )
+
+            else:
+
+                planned.append(
+                    (
+                        APPLICATION_SET_TEMPLATES[component],
+                        appset_file,
+                        context,
+                        environment,
+                    )
+                )
+
+    return planned, existing
+
+
+
+def _render_and_write(
+    planned: list,
+    jinja: Environment,
+) -> list:
+
+    generated = []
+
+    for (
+        template_name,
+        output_file,
+        context,
+        environment,
+    ) in planned:
+
         logger.info(
-            "[argocd_infra] Planning completed | site=%s | planned=%s | existing=%s",
+            "[argocd_infra] Rendering | environment=%s | "
+            "template=%s | output=%s",
             environment,
-            len(planned),
-            len(existing),
+            template_name,
+            output_file,
         )
 
-        if not planned:
+        # Do not overwrite existing files.
+        if output_file.exists():
+
             logger.info(
-                "[argocd_infra] Nothing to generate | site=%s",
-                environment,
-            )
-
-            return {
-                "site": environment,
-                "status": "unchanged",
-                "generated": [],
-                "already_exists": existing,
-            }
-
-        branch = re.sub(
-            r"[^A-Za-z0-9._/-]+",
-            "-",
-            f"feat/argocd_infra/{environment}-{request.tenant}-{request.application}",
-        ).strip("-")
-
-        logger.info(
-            "[argocd_infra] Checkout branch=%s | repository=infra",
-            branch,
-        )
-
-        stage = "git_checkout_branch"
-        checkout_result = git.checkout_branch(branch)
-        logger.info(
-            "[argocd_infra] Checkout result | branch=%s | result=%s",
-            branch, checkout_result,
-        )
-        if not checkout_result:
-            raise RuntimeError(f"Cannot checkout branch: {branch}")
-
-        current_branch = git.get_current_branch()
-
-        logger.info(
-            "[argocd_infra] Current branch=%s",
-            current_branch,
-        )
-
-        if current_branch in {"main", "master", None, "HEAD"}:
-            raise RuntimeError(f"Refusing to push to branch: {current_branch}")
-
-        generated = []
-
-        for template_name, output_file, context in planned:
-            stage = f"render_template:{template_name}:{output_file}"
-            logger.info(
-                "[argocd_infra] Rendering template=%s | output=%s",
-                template_name,
+                "[argocd_infra] File already exists; skipping: %s",
                 output_file,
             )
 
-            if output_file.exists():
-                logger.warning(
-                    "[argocd_infra] File already exists, skipping: %s",
-                    output_file,
-                )
-                existing.append(str(output_file))
-                continue
+            continue
 
-            output_file.parent.mkdir(parents=True, exist_ok=True)
+        output_file.parent.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
 
-            logger.info("[argocd_infra] Loading Jinja template: %s", template_name)
-            template = jinja.get_template(template_name)
-            logger.info("[argocd_infra] Rendering Jinja template: %s", template_name)
-            rendered = template.render(**context)
+        template = jinja.get_template(template_name)
+
+        rendered = template.render(**context)
+
+        try:
+
+            # Exclusive creation prevents accidental overwrite.
+            with output_file.open(
+                "x",
+                encoding="utf-8",
+            ) as file:
+
+                file.write(rendered)
+
+            generated.append(str(output_file))
+
             logger.info(
-                "[argocd_infra] Template rendered | template=%s | bytes=%s",
-                template_name, len(rendered.encode("utf-8")),
+                "[argocd_infra] File generated | "
+                "path=%s | bytes=%s",
+                output_file,
+                len(rendered.encode("utf-8")),
             )
 
-            stage = f"write_file:{output_file}"
-            try:
-                with output_file.open("x", encoding="utf-8") as file:
-                    file.write(rendered)
+        except FileExistsError:
 
-                generated.append(str(output_file))
-
-                logger.info(
-                    "[argocd_infra] File generated successfully: %s",
-                    output_file,
-                )
-
-            except FileExistsError:
-                logger.warning(
-                    "[argocd_infra] File appeared during generation: %s",
-                    output_file,
-                )
-                existing.append(str(output_file))
-
-        if not generated:
             logger.info(
-                "[argocd_infra] No new files generated | site=%s",
-                environment,
+                "[argocd_infra] File appeared during generation; "
+                "skipping: %s",
+                output_file,
             )
 
-            return {
-                "site": environment,
-                "status": "unchanged",
-                "generated": [],
-                "already_exists": existing,
-            }
-
-        message = (
-            f"feat: add ArgoCD infra objects for "
-            f"{request.tenant}/{request.application} ({environment})"
-        )
-
-        logger.info(
-            "[argocd_infra] Git commit/push started | branch=%s | files=%s | message=%s",
-            branch,
-            len(generated),
-            message,
-        )
-
-        stage = "git_add_commit_push"
-        push_result = git.git_add_commit_push(commit_message=message)
-        logger.info(
-            "[argocd_infra] Git add/commit/push result | site=%s | result=%s",
-            environment, push_result,
-        )
-        if not push_result:
-            raise RuntimeError(f"Git commit/push failed: {environment}")
-
-        logger.info(
-            "[argocd_infra] Git commit/push completed | site=%s | branch=%s",
-            environment,
-            branch,
-        )
-
-        return {
-            "site": environment,
-            "status": "pushed",
-            "branch": branch,
-            "generated": generated,
-            "already_exists": existing,
-        }
-
-    except Exception:
-        logger.exception(
-            "[argocd_infra] FAILED site=%s | repository=infra | stage=%s",
-            environment, stage,
-        )
-        raise
+    return generated

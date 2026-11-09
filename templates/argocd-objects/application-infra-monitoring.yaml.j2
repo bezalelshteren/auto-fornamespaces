@@ -32,7 +32,7 @@ spec:
     spec:
       project: {{ names.tenant }}-{{ names.lifecycle }}
       source:
-        repoURL: {{ site.argocd.git_repo_url }}
+        repoURL:   {{ source_repo }}
         targetRevision: master
         path: '{{"{{"}}path{{"}}"}}'
         directory:
